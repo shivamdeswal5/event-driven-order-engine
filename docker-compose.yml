@@ -1,0 +1,76 @@
+services:
+  # postgres DB service
+  postgres:
+    image: postgres:16-alpine
+    container_name: order-engine-postgres
+    restart: always
+    ports:
+      - ${DB_FORWARD_PORT:-5432}:5432
+    environment:
+      - POSTGRES_USER=${DB_USER:-order_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-order_pass}
+      - POSTGRES_DB=${DB_NAME:-order_engine}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-order_user} -d ${DB_NAME:-order_engine}']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - order_engine_network
+
+  # RabbitMQ service
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: order-engine-rabbitmq
+    restart: always
+    ports:
+      - '${RABBITMQ_FORWARD_PORT:-5672}:5672'
+      - '${RABBITMQ_MANAGEMENT_FORWARD_PORT:-15672}:15672'
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USERNAME:-rabbit_user}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-rabbit_pass}
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - order_engine_network
+
+  # Backend service
+  backend:
+    container_name: order-engine-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - ${APP_FORWARD_PORT:-8080}:${APP_PORT:-8080}
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USERNAME:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - order_engine_network
+    restart: on-failure
+
+networks:
+  order_engine_network:
+    name: order-engine-shared-network
+    external: true
+
+volumes:
+  pgdata: {}
+  rabbitmqdata: {}
