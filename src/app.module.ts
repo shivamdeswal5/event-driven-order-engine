@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
+import { SharedModule } from './shared/shared.module';
 
 import {
   appConfig,
@@ -17,6 +18,7 @@ import mikroOrmConfig from '../mikro-orm.config';
  * Registers:
  * - ConfigModule: loads .env and typed config namespaces
  * - MikroOrmModule: database connection with Unit of Work
+ * - SharedModule: global entities, repositories, and message bus services
  *
  * Domain modules (Order, Inventory, Payment, Shipping, Notification)
  * will be added here as they are implemented.
@@ -32,6 +34,9 @@ import mikroOrmConfig from '../mikro-orm.config';
 
     // Database — MikroORM with PostgreSQL
     MikroOrmModule.forRoot(mikroOrmConfig),
+
+    // Shared infrastructure & message bus components
+    SharedModule,
   ],
   controllers: [],
   providers: [],

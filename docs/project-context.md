@@ -102,8 +102,8 @@ module-name/
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| 1. Project Setup | ⬜ Not Started | Docker, NestJS, MikroORM, CORS |
-| 2. Shared Infrastructure | ⬜ Not Started | Outbox/Inbox, message bus, exceptions |
+| 1. Project Setup | ✅ Completed | Docker, NestJS, MikroORM, CORS |
+| 2. Shared Infrastructure | ✅ Completed | Outbox/Inbox, message bus, exceptions |
 | 3. Order Module | ⬜ Not Started | First domain module |
 | 4. Inventory Module | ⬜ Not Started | First inter-module flow |
 | 5. Payment Module | ⬜ Not Started | Saga trigger point |
@@ -143,9 +143,9 @@ docker compose logs -f backend                # View logs
 
 ## 10. Current Status
 
-- **Current Phase**: Phase 2 (Shared Infrastructure)
-- **Last Completed**: Phase 1 (Project Setup & Infrastructure Foundation) complete
-- **Next Step**: Phase 2 — Outbox/Inbox, message bus, exceptions
+- **Current Phase**: Phase 3 (Order Module)
+- **Last Completed**: Phase 2 (Shared Infrastructure) complete
+- **Next Step**: Phase 3 — Implement the first domain module (Order Module)
 
 ---
 

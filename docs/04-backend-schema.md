@@ -34,6 +34,7 @@ Stores events that need to be published to RabbitMQ. Written in the same transac
 | published_at | TIMESTAMP | NULL | NULL = not yet published |
 | retry_count | INT | DEFAULT 0 | Publishing retry attempts |
 | created_at | TIMESTAMP | DEFAULT NOW() | When the message was created |
+| updated_at | TIMESTAMP | DEFAULT NOW() | Last update time |
 
 **Indexes:**
 - `idx_outbox_unpublished` — `(published_at) WHERE published_at IS NULL` (partial index for relay polling)
@@ -51,7 +52,8 @@ Records processed messages to achieve idempotent consumption (exactly-once seman
 | message_id | UUID | NOT NULL | Original message ID from producer |
 | handler_name | VARCHAR(255) | NOT NULL | Which processor handled it |
 | event_type | VARCHAR(255) | NOT NULL | Event type processed |
-| processed_at | TIMESTAMP | DEFAULT NOW() | When it was processed |
+| created_at | TIMESTAMP | DEFAULT NOW() | When it was processed |
+| updated_at | TIMESTAMP | DEFAULT NOW() | Last update time |
 
 **Indexes:**
 - `uq_inbox_message_handler` — UNIQUE `(message_id, handler_name)` (composite key for dedup)

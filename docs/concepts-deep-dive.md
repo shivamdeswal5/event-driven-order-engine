@@ -125,10 +125,11 @@ Producer → Exchange → Binding → Queue → Consumer
 |---------|-------------------|-------------|
 | **Producer** | Person mailing a letter | Publishes messages to an exchange |
 | **Exchange** | Post office sorting facility | Routes messages to queues based on rules |
-| **Binding** | Routing rule at the post office | Connects an exchange to a queue with a routing key pattern |
+| **Binding** | Routing rule at the post office | Connects an exchange to a queue |
 | **Queue** | Mailbox | Stores messages until a consumer picks them up |
 | **Consumer** | Person checking their mailbox | Reads and processes messages from a queue |
-| **Routing Key** | Address on the envelope | Label attached to each message for routing decisions |
+| **Routing Key** | Address on the envelope | Label attached to a message by the producer for routing decisions |
+| **Binding Key** | Filter criteria on the mailbox | Pattern/key used to configure a binding between exchange and queue |
 
 ### 4.2 Exchange Types
 

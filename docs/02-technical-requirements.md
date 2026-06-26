@@ -262,7 +262,7 @@ event-driven-order-engine/
 
 ### 5.2 Queue Architecture
 
-| Queue | Bound To | Routing Pattern |
+| Queue | Bound To | Binding Key |
 |-------|----------|----------------|
 | `inventory.order-events` | order-exchange | `order.events.#` |
 | `payment.inventory-events` | inventory-exchange | `inventory.events.inventory-reserved` |

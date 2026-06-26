@@ -1,9 +1,10 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './shared/infrastructure/http/exceptions/all-exception-filter';
 
 /**
  * Application bootstrap.
@@ -12,7 +13,8 @@ import { AppModule } from './app.module';
  * 1. CORS — so a future frontend (or Postman) can call the API
  * 2. Global ValidationPipe — auto-validates all incoming DTOs
  * 3. Swagger — auto-generated API docs at /api/docs
- * 4. Listens on APP_PORT from environment
+ * 4. Global Exception Filter — maps exceptions to RFC 7807 problem details
+ * 5. Listens on APP_PORT from environment
  */
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -46,6 +48,10 @@ async function bootstrap(): Promise<void> {
       },
     }),
   );
+
+  // ─── Global Exception Filter ────────────────────────────
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new AllExceptionsFilter(httpAdapter));
 
   // ─── Swagger / OpenAPI ──────────────────────────────────
   // Auto-generates API documentation from NestJS decorators.

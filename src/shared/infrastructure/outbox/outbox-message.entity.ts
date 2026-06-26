@@ -1,11 +1,9 @@
-import { Entity, PrimaryKey, Property } from '@mikro-orm/core';
-import { randomUUID } from 'crypto';
+import { Entity, Property } from '@mikro-orm/core';
+import { BaseEntity } from '@shared/domain/base.entity';
+import { OutboxMessageRepository } from '../repository/outbox/outbox-message.repository';
 
-@Entity({ tableName: 'outbox_messages' })
-export class OutboxMessage {
-  @PrimaryKey({ type: 'uuid' })
-  id: string = randomUUID();
-
+@Entity({ tableName: 'outbox_messages', repository: () => OutboxMessageRepository })
+export class OutboxMessage extends BaseEntity {
   @Property()
   eventType!: string;
 
@@ -29,7 +27,5 @@ export class OutboxMessage {
 
   @Property({ nullable: true })
   processedAt?: Date;
-
-  @Property({ onCreate: () => new Date() })
-  createdAt: Date = new Date();
 }
+
