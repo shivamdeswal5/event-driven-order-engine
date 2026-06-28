@@ -107,7 +107,7 @@ If a client places an order, the database transaction writes the following row t
 
 ## 3. File-by-File Explanation
 
-### 3.1 Core Event Contracts (`src/shared/domain/`)
+### 3.1 Core Event Contracts (`modules/shared/src/domain/`)
 
 #### `domain-event.interface.ts`
 *   **What**: An interface defining the structure of a Domain Event (e.g., `OrderPlacedEvent`).
@@ -164,14 +164,14 @@ causationId = M2
 - **`correlationId`** (`C100`) remains the same for all messages in the order workflow, allowing the entire saga to be traced across services.
 - **`causationId`** links each message to the one that directly triggered it (e.g., `PaymentSucceeded` was caused by `InventoryReserved`), enabling parent-child event tracing for debugging and auditing.
 
-### 3.2 Database Persistence (`src/shared/infrastructure/`)
+### 3.2 Database Persistence & Domain Entities
 
-#### `inbox-message.entity.ts` & `outbox-message.entity.ts`
+#### `inbox-message.entity.ts` (`modules/shared/src/domain/inbox/`) & `outbox-message.entity.ts` (`modules/shared/src/domain/outbox/`)
 *   **What**: Database entities representing the schemas of the inbox and outbox tables.
-*   **Why**: Bridges our TypeScript domain objects with the PostgreSQL database schema.
+*   **Why**: Defines our TypeScript domain entities mapped to the PostgreSQL database schema.
 *   **How**: Implemented using MikroORM. We specify indices on `processed` (for outbox polling speed) and a unique composite key on `inbox_messages` (`message_id` + `handler_name`) to prevent race conditions at the database level.
 
-#### `inbox-message.repository.ts` & `outbox-message.repository.ts`
+#### `inbox-message.repository.ts` & `outbox-message.repository.ts` (`modules/shared/src/infrastructure/repository/`)
 *   **What**: Classes containing queries to load/save inbox and outbox records.
 *   **Why**: Decouples SQL/ORM-specific queries from business logic.
 *   **How**: Inherits from MikroORM's `EntityRepository`. For example, `OutboxMessageRepository` includes:
@@ -188,7 +188,7 @@ causationId = M2
 
 ---
 
-### 3.3 RabbitMQ Core Engine (`src/shared/infrastructure/message-bus/rabbitmq/config/`)
+### 3.3 RabbitMQ Core Engine (`modules/shared/src/infrastructure/message-bus/rabbitmq/config/`)
 
 #### `rabbitmq.interface.ts` & `rabbitmq-config.interface.ts`
 * **What**: Type definition files that define the shape of valid RabbitMQ configurations (e.g., structure of connection strings, exchanges, queues, and routing keys).
@@ -339,7 +339,7 @@ The retry queue configures three critical arguments that enable automatic messag
 
 ---
 
-### 3.4 Messaging Pipeline (`src/shared/infrastructure/message-bus/rabbitmq/`)
+### 3.4 Messaging Pipeline (`modules/shared/src/infrastructure/message-bus/rabbitmq/`)
 
 #### `producer.service.ts` & `producer.module.ts`
 
@@ -375,7 +375,7 @@ Why a class instead of a plain object? Because NestJS's Dependency Injection sys
 
 ---
 
-### 3.5 Messaging Orchestration (`src/shared/infrastructure/message-bus/`)
+### 3.5 Messaging Orchestration (`modules/shared/src/infrastructure/message-bus/`)
 
 #### `lazy-load-handler.service.ts`
 
@@ -420,7 +420,7 @@ For each fetched row, the relay calls `ProducerService.publish()` and awaits the
 
 ---
 
-### 3.6 CLI Commands (`src/shared/infrastructure/message-bus/cli-commands/`)
+### 3.6 CLI Commands (`modules/shared/src/infrastructure/message-bus/cli-commands/`)
 
 #### `command-handler.ts` & `module.map.ts`
 
@@ -444,7 +444,7 @@ These are the actual `nest-commander` command classes. In `nest-commander`, a co
 
 ---
 
-### 3.7 Global Exception System (`src/shared/infrastructure/http/exceptions/`)
+### 3.7 Global Exception System (`modules/shared/src/infrastructure/http/exceptions/`)
 
 #### `exceptions.ts`
 
@@ -492,16 +492,16 @@ This is a huge advantage for frontend teams and API consumers — they write one
 Runs the background outbox message dispatcher for a specific module, pulling messages from the database schema and publishing them to RabbitMQ.
 ```bash
 # Run once (CronJob style)
-npx ts-node src/shared/infrastructure/message-bus/cli-commands/command-handler.ts dispatch-messages --module order --schema public --limit 100
+npx ts-node modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts dispatch-messages --module order --schema public --limit 100
 
 # Run continuously (Continuous Worker Daemon style)
-npx ts-node src/shared/infrastructure/message-bus/cli-commands/command-handler.ts dispatch-messages --module order --schema public --continuous
+npx ts-node modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts dispatch-messages --module order --schema public --continuous
 ```
 
 ### 4.2 Run Message Consumer (Daemon Worker)
 Runs the daemon worker that listens on RabbitMQ queues and handles events dynamically.
 ```bash
-npx ts-node src/shared/infrastructure/message-bus/cli-commands/command-handler.ts handle-messages --module order --schema public
+npx ts-node modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts handle-messages --module order --schema public
 ```
 
 ---
@@ -586,7 +586,7 @@ flowchart TD
 1. **CLI Execution**: 
    The process is started using the `nest-commander` CLI entry point. For example, running the consumer worker daemon:
    ```bash
-   npx ts-node src/shared/infrastructure/message-bus/cli-commands/command-handler.ts handle-messages --module order --schema public
+   npx ts-node modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts handle-messages --module order --schema public
    ```
 2. **Container Bootstrap**: 
    `CommandFactory` boots the NestJS application context in a lightweight Command mode (no HTTP listener/server is started).

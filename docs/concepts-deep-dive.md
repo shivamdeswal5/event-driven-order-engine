@@ -56,7 +56,7 @@ Vertical Slice organizes by **feature/use-case** — each slice contains everyth
 
 ```
 # ✅ Vertical Slice (our approach)
-order/
+modules/order/
   src/
     features/
       place-order/
@@ -485,7 +485,7 @@ shared/
 ### 9.2 Module-Level Files
 
 ```
-order/
+modules/order/
   asyncapi.yaml                              # Contract: what events this module produces/consumes
   src/
     domain/

@@ -5,5 +5,13 @@
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "moduleNameMapper": {
+    "^@shared/(.*)$": "<rootDir>/../modules/shared/src/$1",
+    "^@order/(.*)$": "<rootDir>/../modules/order/src/$1",
+    "^@inventory/(.*)$": "<rootDir>/../modules/inventory/src/$1",
+    "^@payment/(.*)$": "<rootDir>/../modules/payment/src/$1",
+    "^@shipping/(.*)$": "<rootDir>/../modules/shipping/src/$1",
+    "^@notification/(.*)$": "<rootDir>/../modules/notification/src/$1"
   }
 }

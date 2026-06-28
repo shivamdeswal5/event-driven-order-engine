@@ -105,59 +105,64 @@ event-driven-order-engine/
 │   ├── 04-backend-schema.md
 │   ├── 05-implementation-plan.md
 │   └── project-context.md
-├── src/
+├── modules/
 │   ├── main.ts
 │   ├── app.module.ts
 │   │
 │   ├── shared/
-│   │   ├── domain/
-│   │   │   ├── common/
-│   │   │   │   ├── base.entity.ts
-│   │   │   │   ├── domain-event.interface.ts
-│   │   │   │   ├── command.interface.ts
-│   │   │   │   ├── query.interface.ts
-│   │   │   │   └── message-envelope.interface.ts
-│   │   │   ├── outbox-message/
-│   │   │   │   ├── outbox-message.entity.ts
-│   │   │   │   └── outbox-message.repository.ts
-│   │   │   └── inbox-message/
-│   │   │       ├── inbox-message.entity.ts
-│   │   │       └── inbox-message.repository.ts
-│   │   │
-│   │   └── infrastructure/
-│   │       ├── message-bus/
-│   │       │   ├── rabbitmq/
-│   │       │   │   ├── config/
-│   │       │   │   │   ├── rabbitmq.config.ts
-│   │       │   │   │   └── rabbitmq-connection.service.ts
-│   │       │   │   ├── producer/
-│   │       │   │   │   └── rabbitmq-producer.service.ts
-│   │       │   │   └── consumer/
-│   │       │   │       └── rabbitmq-consumer.service.ts
-│   │       │   ├── cli-commands/
-│   │       │   │   └── setup-message-bus.command.ts
-│   │       │   ├── message-destination-registry.ts
-│   │       │   ├── outbox-message-relay.service.ts
-│   │       │   ├── inbox-message-handler.service.ts
-│   │       │   └── lazy-load-handler.service.ts
+│   │   ├── openapi.yml
+│   │   ├── asyncapi.yml
+│   │   ├── test/
+│   │   └── src/
+│   │       ├── domain/
+│   │       │   ├── common/
+│   │       │   │   ├── base.entity.ts
+│   │       │   │   ├── domain-event.interface.ts
+│   │       │   │   ├── command.interface.ts
+│   │       │   │   ├── query.interface.ts
+│   │       │   │   └── message-envelope.interface.ts
+│   │       │   ├── outbox-message/
+│   │       │   │   ├── outbox-message.entity.ts
+│   │       │   │   └── outbox-message.repository.ts
+│   │       │   └── inbox-message/
+│   │       │       ├── inbox-message.entity.ts
+│   │       │       └── inbox-message.repository.ts
 │   │       │
-│   │       ├── http/
-│   │       │   └── exceptions/
-│   │       │       ├── all-exception.filter.ts
-│   │       │       ├── exceptions.ts
-│   │       │       ├── registry.ts
-│   │       │       └── strategy.ts
-│   │       │
-│   │       ├── database/
-│   │       │   └── mikro-orm.module.ts
-│   │       │
-│   │       └── config/
-│   │           ├── app.config.ts
-│   │           └── cors.config.ts
+│   │       └── infrastructure/
+│   │           ├── message-bus/
+│   │           │   ├── rabbitmq/
+│   │           │   │   ├── config/
+│   │           │   │   │   ├── rabbitmq.config.ts
+│   │           │   │   │   └── rabbitmq-connection.service.ts
+│   │           │   │   ├── producer/
+│   │           │   │   │   └── rabbitmq-producer.service.ts
+│   │           │   │   └── consumer/
+│   │           │   │       └── rabbitmq-consumer.service.ts
+│   │           │   ├── cli-commands/
+│   │           │   │   └── setup-message-bus.command.ts
+│   │           │   ├── message-destination-registry.ts
+│   │           │   ├── outbox-message-relay.service.ts
+│   │           │   ├── inbox-message-handler.service.ts
+│   │           │   └── lazy-load-handler.service.ts
+│   │           │
+│   │           ├── http/
+│   │           │   └── exceptions/
+│   │           │       ├── all-exception.filter.ts
+│   │           │       ├── exceptions.ts
+│   │           │       ├── registry.ts
+│   │           │       └── strategy.ts
+│   │           │
+│   │           ├── database/
+│   │           │   └── mikro-orm.module.ts
+│   │           │
+│   │           └── config/
+│   │               ├── app.config.ts
+│   │               └── cors.config.ts
 │   │
 │   ├── order/
-│   │   ├── asyncapi.yaml
-│   │   ├── order.module.ts
+│   │   ├── openapi.yml
+│   │   ├── asyncapi.yml
+│   │   ├── test/
 │   │   └── src/
 │   │       ├── domain/
 │   │       │   ├── entities/
@@ -205,26 +210,30 @@ event-driven-order-engine/
 │   │                   └── mappers.ts
 │   │
 │   ├── inventory/
-│   │   ├── asyncapi.yaml
-│   │   ├── inventory.module.ts
+│   │   ├── openapi.yml
+│   │   ├── asyncapi.yml
+│   │   ├── test/
 │   │   └── src/
 │   │       ├── domain/...
 │   │       ├── features/...
 │   │       └── infrastructure/...
 │   │
 │   ├── payment/
-│   │   ├── asyncapi.yaml
-│   │   ├── payment.module.ts
+│   │   ├── openapi.yml
+│   │   ├── asyncapi.yml
+│   │   ├── test/
 │   │   └── src/...
 │   │
 │   ├── shipping/
-│   │   ├── asyncapi.yaml
-│   │   ├── shipping.module.ts
+│   │   ├── openapi.yml
+│   │   ├── asyncapi.yml
+│   │   ├── test/
 │   │   └── src/...
 │   │
 │   └── notification/
-│       ├── asyncapi.yaml
-│       ├── notification.module.ts
+│       ├── openapi.yml
+│       ├── asyncapi.yml
+│       ├── test/
 │       └── src/...
 │
 └── migrations/

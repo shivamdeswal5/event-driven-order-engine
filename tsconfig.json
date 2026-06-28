@@ -16,12 +16,12 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@shared/*": ["src/shared/*"],
-      "@order/*": ["src/order/*"],
-      "@inventory/*": ["src/inventory/*"],
-      "@payment/*": ["src/payment/*"],
-      "@shipping/*": ["src/shipping/*"],
-      "@notification/*": ["src/notification/*"]
+      "@shared/*": ["modules/shared/src/*"],
+      "@order/*": ["modules/order/src/*"],
+      "@inventory/*": ["modules/inventory/src/*"],
+      "@payment/*": ["modules/payment/src/*"],
+      "@shipping/*": ["modules/shipping/src/*"],
+      "@notification/*": ["modules/notification/src/*"]
     }
   }
 }

@@ -1,0 +1,346 @@
+openapi: 3.0.3
+info:
+  title: Order Fulfillment API
+  version: 1.0.0
+  description: |-
+    REST API for placing, retrieving, listing, and cancelling orders within the Event-Driven Order Engine.
+    This API forms the core of the order placement and fulfillment tracking lifecycle.
+  termsOfService: http://swagger.io/terms/
+  contact:
+    name: API Support
+    email: support@order-fulfillment.example.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+servers:
+  - url: http://localhost:8080/
+    description: Development Server
+  - url: https://api.order-fulfillment.example.com
+    description: Production Server
+tags:
+  - name: Orders
+    description: Operations related to orders management
+
+paths:
+  /api/orders:
+    post:
+      tags:
+        - Orders
+      summary: Place a new order
+      description: Create a new order with multiple items for a customer.
+      operationId: placeOrder
+      requestBody:
+        required: true
+        description: Details of the order to be placed
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderDto'
+      responses:
+        '201':
+          description: Order placed successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Order placed successfully.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      tags:
+        - Orders
+      summary: Retrieve the list of orders
+      description: Retrieve a paginated list of orders, optionally filtered by status.
+      operationId: listOrders
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter orders by their current status.
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: limit
+          in: query
+          required: false
+          description: Limit the number of orders returned. Default is 10.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+        - name: offset
+          in: query
+          required: false
+          description: Number of orders to skip. Default is 0.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+      responses:
+        '200':
+          description: Orders retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderResponse'
+                  total:
+                    type: integer
+                    example: 25
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/orders/{id}:
+    get:
+      tags:
+        - Orders
+      summary: Retrieve an order by ID
+      description: Retrieve detailed information about a single order by its UUID.
+      operationId: getOrder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The UUID of the order
+          schema:
+            type: string
+            format: uuid
+            example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+      responses:
+        '200':
+          description: Order details retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '404':
+          $ref: '#/components/responses/OrderNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/orders/{id}/cancel:
+    post:
+      tags:
+        - Orders
+      summary: Cancel an order
+      description: Cancel an order by specifying the cancellation reason. Cancelling is only allowed for orders not yet shipped or delivered.
+      operationId: cancelOrder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The UUID of the order to cancel
+          schema:
+            type: string
+            format: uuid
+            example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+      requestBody:
+        required: true
+        description: Reason for order cancellation
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelOrderDto'
+      responses:
+        '201':
+          description: Order cancelled successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Order cancelled successfully.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/InvalidOrderState'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    OrderStatus:
+      type: string
+      enum:
+        - PENDING
+        - PLACED
+        - PAID
+        - CANCELLED
+        - SHIPPED
+        - DELIVERED
+      example: PLACED
+
+    PlaceOrderItemDto:
+      type: object
+      required:
+        - productId
+        - quantity
+        - price
+      properties:
+        productId:
+          type: string
+          format: uuid
+          example: 3b2f6b8d-8e5c-4023-913f-6f81d4ca92b0
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        price:
+          type: number
+          minimum: 0.0
+          example: 29.99
+
+    PlaceOrderDto:
+      type: object
+      required:
+        - customerId
+        - items
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          example: b2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaceOrderItemDto'
+
+    CancelOrderDto:
+      type: object
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          example: User requested cancellation before shipping.
+
+    OrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        customerId:
+          type: string
+          format: uuid
+          example: b2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        totalPrice:
+          type: number
+          example: 59.98
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        cancelReason:
+          type: string
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-06-28T12:00:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-06-28T12:05:00Z'
+
+  responses:
+    BadRequest:
+      description: Bad request / validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 400
+              message:
+                type: array
+                items:
+                  type: string
+                example:
+                  - "customerId must be a UUID string"
+                  - "items must be a non-empty array"
+              error:
+                type: string
+                example: Bad Request
+
+    OrderNotFound:
+      description: The specified order was not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                example: 'https://api.order-engine.com/errors/order-not-found'
+              title:
+                type: string
+                example: Order Not Found
+              status:
+                type: integer
+                example: 404
+              detail:
+                type: string
+                example: Order with ID a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0 was not found.
+
+    InvalidOrderState:
+      description: The order is not in a state that permits the requested action
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                example: 'https://api.order-engine.com/errors/invalid-order-state'
+              title:
+                type: string
+                example: Invalid Order State
+              status:
+                type: integer
+                example: 409
+              detail:
+                type: string
+                example: Cannot perform action 'cancel' on order a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0 in state 'SHIPPED'.
+              currentState:
+                type: string
+                example: SHIPPED
+              action:
+                type: string
+                example: cancel
+
+    InternalServerError:
+      description: General internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                example: 'about:blank'
+              title:
+                type: string
+                example: Internal Server Error
+              status:
+                type: integer
+                example: 500
+              detail:
+                type: string
+                example: An unexpected error occurred.
