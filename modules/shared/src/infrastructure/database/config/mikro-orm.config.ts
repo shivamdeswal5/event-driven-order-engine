@@ -31,8 +31,8 @@ export default (contextName: string = 'default'): Options => {
 
   // Migration path: each module has its own migrations folder
   const migrationsPath = !isDefault
-    ? `dist/${contextName}/src/infrastructure/database/migrations`
-    : 'dist/shared/src/infrastructure/database/migrations';
+    ? `dist/modules/${contextName}/src/infrastructure/database/migrations`
+    : 'dist/modules/shared/src/infrastructure/database/migrations';
 
   return {
     driver:   PostgreSqlDriver,
@@ -50,9 +50,9 @@ export default (contextName: string = 'default'): Options => {
 
     // Entity discovery — scoped to context folder or all modules
     entities:   [
-      `dist/${moduleGlob}/src/domain/**/*.entity.js`,
-      `dist/${moduleGlob}/src/infrastructure/database/**/*.entity.js`,
-      'dist/shared/src/domain/**/*.entity.js',
+      `dist/modules/${moduleGlob}/src/domain/**/*.entity.js`,
+      `dist/modules/${moduleGlob}/src/infrastructure/database/**/*.entity.js`,
+      'dist/modules/shared/src/domain/**/*.entity.js',
     ],
     entitiesTs: [
       `modules/${moduleGlob}/src/domain/**/*.entity.ts`,

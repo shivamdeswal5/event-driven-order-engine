@@ -12,7 +12,7 @@ export class Order extends BaseEntity {
   @Property({ type: 'decimal' })
   totalPrice!: number;
 
-  @Property({ type: OrderStatusMapper })
+  @Property({ type: OrderStatusMapper, default: 0 })
   status: OrderStatus = OrderStatus.PENDING;
 
   @Property({ nullable: true })

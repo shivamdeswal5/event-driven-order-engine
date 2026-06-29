@@ -1,0 +1,133 @@
+asyncapi: 3.0.0
+info:
+  title: Order Module Events
+  version: 1.0.0
+  description: Event definitions published by the Order Module of the Event-Driven Order Engine.
+servers:
+  rabbitMQ:
+    host: localhost:5673
+    protocol: amqp
+    description: Development RabbitMQ Broker
+operations:
+  order.placed:
+    action: send
+    channel:
+      $ref: '#/channels/order.placed'
+    messages:
+      - $ref: '#/channels/order.placed/messages/publish.message'
+  order.cancelled:
+    action: send
+    channel:
+      $ref: '#/channels/order.cancelled'
+    messages:
+      - $ref: '#/channels/order.cancelled/messages/publish.message'
+channels:
+  order.placed:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: order.placed
+    messages:
+      publish.message:
+        $ref: '#/components/messages/OrderPlacedEvent'
+  order.cancelled:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: order.cancelled
+    messages:
+      publish.message:
+        $ref: '#/components/messages/OrderCancelledEvent'
+components:
+  messages:
+    OrderPlacedEvent:
+      name: OrderPlacedEvent
+      title: Order Placed Event
+      summary: Published immediately after an order is successfully created/placed.
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/OrderPlacedPayload'
+    OrderCancelledEvent:
+      name: OrderCancelledEvent
+      title: Order Cancelled Event
+      summary: Published immediately after an order is successfully cancelled.
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/OrderCancelledPayload'
+  schemas:
+    OrderPlacedPayload:
+      type: object
+      required:
+        - orderId
+        - customerId
+        - totalPrice
+        - items
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        customerId:
+          type: string
+          format: uuid
+          example: b2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        totalPrice:
+          type: number
+          minimum: 0
+          example: 59.98
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+    OrderItem:
+      type: object
+      required:
+        - productId
+        - quantity
+        - price
+      properties:
+        productId:
+          type: string
+          format: uuid
+          example: 3b2f6b8d-8e5c-4023-913f-6f81d4ca92b0
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+        price:
+          type: number
+          minimum: 0
+          example: 29.99
+    OrderCancelledPayload:
+      type: object
+      required:
+        - orderId
+        - cancelReason
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        cancelReason:
+          type: string
+          example: User requested cancellation before shipping.
+  messageTraits:
+    commonHeaders:
+      headers:
+        type: object
+        properties:
+          message_id:
+            type: string
+            format: uuid
+            example: 8c76601b-9921-4167-821c-eb7eefd4d041
+          type:
+            type: string
+            description: Message type (event name)
+            example: OrderPlacedEvent
+          app_id:
+            type: string
+            example: event-driven-order-engine
+          timestamp:
+            type: string
+            format: date-time
+            example: '2026-06-29T12:00:00.000Z'

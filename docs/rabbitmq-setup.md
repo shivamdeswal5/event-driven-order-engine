@@ -428,7 +428,210 @@ By default, when you run a NestJS application, it starts an HTTP server and keep
 
 `command-handler.ts` is the CLI entrypoint that makes this possible. Instead of calling `NestFactory.create()` which starts an HTTP server, it calls `CommandFactory.run()` from `nest-commander`, which boots the Nest DI container in a lightweight command mode. It reads the `--module` argument from `process.argv` (e.g. `--module order`) and looks up the corresponding NestJS module in `module.map.ts`.
 
-`module.map.ts` is a simple key-value map: `{ order: OrderConsumerModule, payment: PaymentConsumerModule }`. This map is the entire registry of runnable worker modules. When you add a new domain module, you simply add it here. The command handler loads the mapped module and passes it to `CommandFactory`, which then discovers and runs the appropriate commander command inside it.
+`module.map.ts` is a simple key-value map. In our architecture, instead of mapping to static, boilerplate-heavy consumer/producer modules (Option A), it leverages a dynamic registry helper (Option B) to build the CLI modules at runtime. When you add a new domain module, you simply register its message destinations and signature types in the map. The command handler loads the dynamically mapped module and passes it to `CommandFactory`, which then discovers and runs the appropriate commander command inside it.
+
+#### 3.6.1 Architectural Evolution: Modular Monolith Boilerplate (Option A) vs. Dynamic Orchestration (Option B)
+
+##### The Context: What Was Option A?
+In standard modular monoliths (like `residency-backend`), each domain module is forced to replicate transport-level infrastructure folders:
+```
+modules/order/src/infrastructure/message-bus/rabbitmq/
+├── config/
+│   └── order-rabbitmq.config.ts  (Duplicate env-reading logic)
+├── consumer/
+│   └── consumer.module.ts        (Duplicate NestJS Consumer module)
+└── producer/
+    └── producer.module.ts        (Duplicate NestJS Producer module)
+```
+While this ensures complete physical separation, it introduces massive code duplication and boilerplate. If the project grows to 10 domain modules, developers have to copy-paste and maintain 30 extra infrastructure files that do almost exactly the same thing.
+
+##### The Solution: Dynamic Orchestration (Option B)
+Since our application has a global `SharedModule`, we can centralize all the repetitive RabbitMQ bootstrapping and config-reading logic in one place.
+Instead of physical classes inside each domain module, the `SharedModule` provides a `DynamicRabbitMqConfig` factory class and a dynamic module creator helper inside `module.map.ts`. 
+
+- **Pure Domain Slices**: Domain modules remain completely focused on domain rules, features, and event schemas. They have no RabbitMQ folders.
+- **Dynamic Configuration**: A centralized, prefix-aware class in the `SharedModule` reads configurations dynamically (e.g. prefixing with `RABBITMQ_ORDER_` for the Order module, and falling back to defaults if not set in `.env`).
+- **Dynamic CLI Modules**: The `module.map.ts` builds the CLI consumer/producer wrapper modules at runtime using NestJS's DynamicModule API, passing the domain module's destinations and handlers.
+
+##### Why does `module.map.ts` look like it has "so much code" compared to `residency-backend`?
+
+In `residency-backend`, the `module.map.ts` was extremely simple (only 10 lines of imports and mappings) because **all the complexity was hidden inside separate files in the domain modules**. 
+
+Specifically, each domain module had to physically write and maintain:
+1. `applications-for-stay-rabbitmq.config.ts` (defining queues/routing keys)
+2. `consumer.module.ts` (importing database, configurations, and registering consumer)
+3. `producer.module.ts` (importing database, configurations, and registering producer)
+
+So while `module.map.ts` looked clean, the project was cluttered with dozens of repetitive infrastructure files across modules.
+
+In **Option B (Dynamic Orchestration)**, we deleted all those files from the domain modules. However, NestJS still needs those wrapper modules to boot. Therefore, we **generate those modules dynamically in `module.map.ts` at runtime** using helper functions (`createProducerCliModule` and `createConsumerCliModule`).
+
+Here is a side-by-side comparison of the two approaches as the project scales:
+
+```mermaid
+graph TD
+    subgraph Option A (Residency Pattern)
+        R1[module.map.ts] --> M1[OrderProducerModule]
+        R1 --> M2[OrderConsumerModule]
+        R1 --> M3[PaymentProducerModule]
+        R1 --> M4[PaymentConsumerModule]
+        style R1 fill:#f9f,stroke:#333,stroke-width:2px
+    end
+    subgraph Option B (Dynamic Orchestration)
+        R2[module.map.ts with dynamic helpers] -.-> DM1["Dynamic Producer (Order)"]
+        R2 -.-> DM2["Dynamic Consumer (Order)"]
+        R2 -.-> DM3["Dynamic Producer (Payment)"]
+        R2 -.-> DM4["Dynamic Consumer (Payment)"]
+        style R2 fill:#9cf,stroke:#333,stroke-width:2px
+    end
+```
+
+- **In Residency (Option A)**:
+  - Per Module: **3 files** of boilerplate code.
+  - For 5 modules: **15 physical files** to maintain. If we need to change how database/MikroORM connections are initialized for CLI workers, we have to modify all 15 files!
+- **In our Engine (Option B)**:
+  - Per Module: **0 files** of boilerplate code.
+  - For 5 modules: **0 physical files** to maintain. All 5 modules are dynamically wrapped by the helper functions in `module.map.ts`. If we need to change database configuration for all workers, we do it in **one place** inside `module.map.ts`.
+
+This centralization of concern is why `module.map.ts` has more code, but the codebase overall is significantly smaller, cleaner, and easier to maintain.
+
+##### Conceptual Deep-Dive: What is Boilerplate Code?
+
+**Boilerplate code** refers to sections of code that must be included in many places with little or no modification. It is repetitive "plumbing" or "setup" code that does not implement any actual business logic (such as placing an order or cancelling a shipment) but is required by the framework or runtime environment to boot, configure, or connect different parts of the system.
+
+###### Visualizing Boilerplate Code in residency-backend (Option A)
+
+Under Option A, if you created an `order` module and a `payment` module, you would have to write two separate physical files that look nearly identical:
+
+```typescript
+// modules/order/src/infrastructure/message-bus/rabbitmq/consumer/consumer.module.ts
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+      load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
+    }),
+    MikroOrmModule.forRoot(mikroOrmConfig),
+    ConsumerModule.forSignatureTypes(OrderSignatureTypes, OrderRabbitMqConfig),
+    OrderMessageDestinationModule,
+  ],
+})
+export class OrderConsumerModule {}
+```
+
+```typescript
+// modules/payment/src/infrastructure/message-bus/rabbitmq/consumer/consumer.module.ts
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+      load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
+    }),
+    MikroOrmModule.forRoot(mikroOrmConfig),
+    ConsumerModule.forSignatureTypes(PaymentSignatureTypes, PaymentRabbitMqConfig),
+    PaymentMessageDestinationModule,
+  ],
+})
+export class PaymentConsumerModule {}
+```
+
+Notice that **90% of the code is duplicated**. The only differences are the variable references (`Order` vs. `Payment`). Copying and pasting this structure across 5 to 10 modules is a classic example of boilerplate code.
+
+This single reusable function accepts the variable parts as arguments and dynamically registers the module decorators at runtime. The developer no longer has to create or maintain duplicate physical files inside their domain module folders.
+
+###### Detailed Code Breakdown: What is happening in `module.map.ts`?
+
+Here is a step-by-step walkthrough of the code in our [module.map.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/cli-commands/module.map.ts):
+
+1. **The Dynamic Producer Module Creator (`createProducerCliModule`)**:
+   ```typescript
+   function createProducerCliModule(moduleName: string, destinationModule: any): any {
+     const configClass = createDynamicRabbitMqConfig(moduleName);
+
+     @Module({
+       imports: [
+         ConfigModule.forRoot({
+           isGlobal: true,
+           envFilePath: '.env',
+           load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
+         }),
+         MikroOrmModule.forRoot(mikroOrmConfig),
+         ProducerModule.forRoot(configClass),
+         destinationModule,
+       ],
+     })
+     class DynamicProducerCliModule {}
+
+     return DynamicProducerCliModule;
+   }
+   ```
+   - **What it does**: It dynamically defines a NestJS class decorated with `@Module`.
+   - **Why it's needed**: When the CLI runs `dispatch-messages --module order`, it needs a NestJS container that boots environment variables (`ConfigModule`), connects to PostgreSQL (`MikroOrmModule`), and sets up the event dispatchers (`ProducerModule`).
+   - **How it saves work**: Instead of writing a new physical producer module class for every domain module, this function generates the class in memory at boot time.
+
+2. **The Dynamic Consumer Module Creator (`createConsumerCliModule`)**:
+   ```typescript
+   function createConsumerCliModule(moduleName: string, signatureTypes: any, destinationModule: any): any {
+     const configClass = createDynamicRabbitMqConfig(moduleName);
+
+     @Module({
+       imports: [
+         ConfigModule.forRoot({
+           isGlobal: true,
+           envFilePath: '.env',
+           load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
+         }),
+         MikroOrmModule.forRoot(mikroOrmConfig),
+         ConsumerModule.forSignatureTypes(signatureTypes, configClass),
+         destinationModule,
+       ],
+     })
+     class DynamicConsumerCliModule {}
+
+     return DynamicConsumerCliModule;
+   }
+   ```
+   - **What it does**: It dynamically creates a NestJS consumer class decorated with `@Module`.
+   - **Why it's needed**: When the CLI daemon runs `handle-messages --module order`, it needs database connectivity, queue subscriber configurations (`ConsumerModule`), and the mappings of event types to handlers (`signatureTypes`).
+
+3. **The Mappings (`CONSUMER_MODULE_MAP` / `PRODUCER_MODULE_MAP`)**:
+   ```typescript
+   export const CONSUMER_MODULE_MAP: Record<string, any> = {
+     order: createConsumerCliModule('order', OrderSignatureTypes, OrderMessageDestinationModule),
+   };
+
+   export const PRODUCER_MODULE_MAP: Record<string, any> = {
+     order: createProducerCliModule('order', OrderMessageDestinationModule),
+   };
+   ```
+   - **What it does**: This behaves exactly like `residency-backend`'s mapping. But instead of importing physical files, it invokes our helper functions to create the required NestJS modules on the fly. 
+
+This gives us the best of both worlds: a clean domain folder structure, a centralized place to control all dynamic worker setup, and zero boilerplate!
+
+##### The Microservices Migration Path: How Does Option B Scale?
+A common concern is: *If we don't have the config/module files inside the domain module, doesn't that make it harder to split it into a microservice later?*
+
+Actually, the opposite is true. 
+
+In a true microservice architecture, a microservice runs in its own repository and **only has a single domain context**. Therefore, the dynamic CLI mapper (`module.map.ts`) and all the multi-module CLI wrapper classes (like `OrderConsumerModule` and `OrderProducerModule`) become completely obsolete. 
+
+When you split the Order module into its own microservice using Option B:
+1. **Copy the Domain Slice**: You copy `modules/order` and `modules/shared` to the new repository.
+2. **Define Microservice Bootstrap**: In the root of the new microservice, you write a standard, single-purpose NestJS bootstrapping file (e.g., `main.ts` or `app.module.ts`) that imports the shared infrastructure and the order module:
+   ```typescript
+   // In the new order-microservice repository's app.module.ts:
+   @Module({
+     imports: [
+       SharedModule,
+       OrderModule,
+       ProducerModule.forRoot(OrderRabbitMqConfig), // Config defined at the host application level
+     ],
+   })
+     export class AppModule {}
+   ```
+This separation is cleaner because the choice of transport (HTTP, RabbitMQ CLI, or gRPC) belongs to the *host application container*, not the *domain library*. Option B enforces this clean separation from day one.
 
 In Kubernetes, this translates directly to two manifest types:
 - **CronJob** for `dispatch-messages`: Kubernetes schedules the pod to run on a cron schedule (e.g. every 30 seconds), the pod runs the outbox relay once, publishes all pending messages, and exits with code 0.

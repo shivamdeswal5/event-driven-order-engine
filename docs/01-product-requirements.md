@@ -116,15 +116,7 @@ Simulated: 80% success, 20% failure (configurable).
 |---------|-------------|
 | Transactional Outbox | Events saved atomically with business data |
 | Transactional Inbox | Duplicate detection + idempotent processing |
-| Outbox Relay Worker | Background poller: outbox → RabbitMQ |
-| Publisher Confirms | Guarantee broker received the message |
-| Manual ACK | Consumer confirms successful processing |
-| Retry + Backoff | 1s → 2s → 4s → 8s → 16s exponential |
-| Dead Letter Queue | Captures permanently failed messages |
-| Message Envelope | messageId, correlationId, causationId standard |
-| Saga Compensation | Automatic rollback on partial failures |
-| OpenAPI/Swagger | REST API docs at `/api/docs` |
-| AsyncAPI | Per-module event contracts |
+| Outbox Relay Worker | Background poller: outbox → RabbitMQ |                        
 | Health Checks | DB, RabbitMQ, relay lag verification |
 | Structured Logging | JSON logs with correlationId |
 

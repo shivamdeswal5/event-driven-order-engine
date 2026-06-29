@@ -19,4 +19,4 @@ COPY --chown=node:node --from=build /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/dist ./dist
 COPY --chown=node:node . .
 EXPOSE $APP_PORT
-CMD ["dumb-init", "node", "dist/main"]
+CMD ["dumb-init", "node", "dist/modules/main"]
