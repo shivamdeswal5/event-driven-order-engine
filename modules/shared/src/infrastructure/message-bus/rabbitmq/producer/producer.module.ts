@@ -23,10 +23,7 @@ export class ProducerModule {
         OutboxMessageRepository,
         OutboxMessageRelay,
       ],
-      exports: [
-        ProducerService,
-        OutboxMessageRelay,
-      ],
+      exports: [ProducerService, OutboxMessageRelay],
     };
   }
 }

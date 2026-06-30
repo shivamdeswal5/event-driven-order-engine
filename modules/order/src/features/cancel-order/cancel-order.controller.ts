@@ -8,10 +8,7 @@ export class CancelOrderController {
   constructor(private readonly cancelOrderHandler: CancelOrderHandler) {}
 
   @Post(':id/cancel')
-  async cancelOrder(
-    @Param('id') id: string,
-    @Body() dto: CancelOrderDto,
-  ) {
+  async cancelOrder(@Param('id') id: string, @Body() dto: CancelOrderDto) {
     const command = new CancelOrderCommand(id, dto.reason);
     await this.cancelOrderHandler.handle(command);
     return {

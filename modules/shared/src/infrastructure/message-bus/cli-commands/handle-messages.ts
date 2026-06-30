@@ -18,6 +18,7 @@ interface BasicCommandOptions {
   errorQueueExchange?: string;
   errorQueueExchangeType?: string;
   errorQueueRoutingKey?: string;
+  errorQueue?: string;
   appName?: string;
 }
 
@@ -35,11 +36,11 @@ export class HandleMessages extends CommandRunner {
     const { schema } = options;
 
     const schemaMapper: Record<string, string> = {
-      order: process.env.DB_ORDER_SCHEMA || 'public',
-      inventory: process.env.DB_INVENTORY_SCHEMA || 'public',
-      payment: process.env.DB_PAYMENT_SCHEMA || 'public',
-      shipping: process.env.DB_SHIPPING_SCHEMA || 'public',
-      notification: process.env.DB_NOTIFICATION_SCHEMA || 'public',
+      order: process.env.DB_SCHEMA_ORDER || 'order_schema',
+      inventory: process.env.DB_SCHEMA_INVENTORY || 'inventory_schema',
+      payment: process.env.DB_SCHEMA_PAYMENT || 'payment_schema',
+      shipping: process.env.DB_SCHEMA_SHIPPING || 'shipping_schema',
+      notification: process.env.DB_SCHEMA_NOTIFICATION || 'notification_schema',
     };
 
     const targetSchema = schemaMapper[schema];
@@ -66,6 +67,7 @@ export class HandleMessages extends CommandRunner {
       errorQueueExchange: options.errorQueueExchange,
       errorQueueExchangeType: options.errorQueueExchangeType,
       errorQueueRoutingKey: options.errorQueueRoutingKey,
+      errorQueue: options.errorQueue,
       appName: options.appName,
     });
   }
@@ -195,6 +197,14 @@ export class HandleMessages extends CommandRunner {
     description: 'Error queue routing key',
   })
   parseErrorQueueRoutingKey(val: string): string {
+    return val;
+  }
+
+  @Option({
+    flags: '--error-queue <queue>',
+    description: 'Error queue name',
+  })
+  parseErrorQueue(val: string): string {
     return val;
   }
 

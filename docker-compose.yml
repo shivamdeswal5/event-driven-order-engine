@@ -56,6 +56,11 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SCHEMA_ORDER=${DB_SCHEMA_ORDER:-order_schema}
+      - DB_SCHEMA_INVENTORY=${DB_SCHEMA_INVENTORY:-inventory_schema}
+      - DB_SCHEMA_PAYMENT=${DB_SCHEMA_PAYMENT:-payment_schema}
+      - DB_SCHEMA_SHIPPING=${DB_SCHEMA_SHIPPING:-shipping_schema}
+      - DB_SCHEMA_NOTIFICATION=${DB_SCHEMA_NOTIFICATION:-notification_schema}
       - RABBITMQ_URL=amqp://${RABBITMQ_USERNAME:-rabbit_user}:${RABBITMQ_PASSWORD:-rabbit_pass}@rabbitmq:5672
     depends_on:
       postgres:

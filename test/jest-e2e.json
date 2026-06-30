@@ -6,6 +6,9 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
+  "transformIgnorePatterns": [
+    "/node_modules/(?!@faker-js/)"
+  ],
   "moduleNameMapper": {
     "^@shared/(.*)$": "<rootDir>/../modules/shared/src/$1",
     "^@order/(.*)$": "<rootDir>/../modules/order/src/$1",

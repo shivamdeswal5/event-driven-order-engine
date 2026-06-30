@@ -1,0 +1,214 @@
+openapi: 3.0.3
+info:
+  title: Payment API
+  version: 1.0.0
+  description: |-
+    REST API for tracking and listing payments within the Event-Driven Order Engine.
+    This API allows retrieving payment status and history associated with orders.
+  termsOfService: http://swagger.io/terms/
+  contact:
+    name: API Support
+    email: support@order-fulfillment.example.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+servers:
+  - url: http://localhost:8080/
+    description: Development Server
+  - url: https://api.order-fulfillment.example.com
+    description: Production Server
+tags:
+  - name: Payment
+    description: Operations related to payments and payment history
+
+paths:
+  /api/payments:
+    get:
+      tags:
+        - Payment
+      summary: Retrieve the list of payments
+      description: Retrieve a paginated list of all payments, optionally filtered by status.
+      operationId: listPayments
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter payments by status.
+          schema:
+            $ref: '#/components/schemas/PaymentStatus'
+        - name: limit
+          in: query
+          required: false
+          description: Limit the number of payments returned. Default is 10.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+        - name: offset
+          in: query
+          required: false
+          description: Number of payments to skip. Default is 0.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+      responses:
+        '200':
+          description: Payments retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PaymentResponse'
+                  total:
+                    type: integer
+                    example: 5
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/payments/{orderId}:
+    get:
+      tags:
+        - Payment
+      summary: Retrieve a payment by Order ID
+      description: Retrieve detailed information about a payment by its associated Order UUID.
+      operationId: getPayment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: The UUID of the order associated with the payment
+          schema:
+            type: string
+            format: uuid
+            example: 2d9c6d91-d051-4fe1-9ea5-36711f8262a5
+      responses:
+        '200':
+          description: Payment details retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '404':
+          $ref: '#/components/responses/PaymentNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    PaymentStatus:
+      type: string
+      enum:
+        - PENDING
+        - PROCESSING
+        - COMPLETED
+        - FAILED
+        - REFUNDED
+      example: COMPLETED
+
+    PaymentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 807915c4-d91c-4cb1-91c0-fb074dc70d27
+        orderId:
+          type: string
+          format: uuid
+          example: 29b2a8d2-d276-4710-aa07-fcc02371f74d
+        amount:
+          type: number
+          example: 60.00
+        currency:
+          type: string
+          example: USD
+        status:
+          $ref: '#/components/schemas/PaymentStatus'
+        failureReason:
+          type: string
+          nullable: true
+          example: null
+        processedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-06-30T05:04:55.573Z'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-06-30T05:04:55.567Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-06-30T05:04:55.573Z'
+
+  responses:
+    BadRequest:
+      description: Bad request / validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 400
+              message:
+                type: array
+                items:
+                  type: string
+                example:
+                  - "status must be one of the following values: PENDING, PROCESSING, COMPLETED, FAILED, REFUNDED"
+              error:
+                type: string
+                example: Bad Request
+
+    PaymentNotFound:
+      description: The specified payment was not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                example: 'https://api.order-engine.com/errors/payment-not-found'
+              title:
+                type: string
+                example: Payment Not Found
+              status:
+                type: integer
+                example: 404
+              detail:
+                type: string
+                example: Payment for ID/OrderId '2d9c6d91-d051-4fe1-9ea5-36711f8262a5' not found.
+
+    InternalServerError:
+      description: General internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                example: 'about:blank'
+              title:
+                type: string
+                example: Internal Server Error
+              status:
+                type: integer
+                example: 500
+              detail:
+                type: string
+                example: An unexpected error occurred.

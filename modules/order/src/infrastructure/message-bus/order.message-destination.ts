@@ -1,6 +1,8 @@
 import { MessageDestinationRegistry } from '@shared/infrastructure/message-bus/message-destination-registry';
 
-export const registerOrderMessageDestinations = (registry: MessageDestinationRegistry) => {
+export const registerOrderMessageDestinations = (
+  registry: MessageDestinationRegistry,
+) => {
   registry.register('OrderPlacedEvent', {
     exchange: 'order-exchange',
     routingKey: 'order.placed',

@@ -17,6 +17,6 @@ export class RabbitmqRuntimeConfig {
   }
 
   mergeWithBase(baseConfig: ConfigType): ConfigType {
-    return { ...baseConfig, ...this.runtimeConfig } as ConfigType;
+    return { ...baseConfig, ...this.runtimeConfig };
   }
 }

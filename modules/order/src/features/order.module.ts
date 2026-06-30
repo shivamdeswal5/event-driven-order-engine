@@ -13,12 +13,5 @@ import { OrderMessageDestinationModule } from '../infrastructure/message-bus/ord
     CancelOrderModule,
     OrderMessageDestinationModule,
   ],
-  exports: [
-    PlaceOrderModule,
-    GetOrderModule,
-    ListOrdersModule,
-    CancelOrderModule,
-    OrderMessageDestinationModule,
-  ],
 })
 export class OrderModule {}

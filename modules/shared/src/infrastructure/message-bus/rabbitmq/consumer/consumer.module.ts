@@ -28,10 +28,7 @@ export class ConsumerModule {
         InboxMessageHandler,
         InboxMessageRepository,
       ],
-      exports: [
-        ConsumerService,
-        InboxMessageHandler,
-      ],
+      exports: [ConsumerService, InboxMessageHandler],
     };
   }
 }

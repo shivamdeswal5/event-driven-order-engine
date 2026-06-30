@@ -1,4 +1,5 @@
-import { EntityRepository } from '@mikro-orm/postgresql';
+import { Injectable } from '@nestjs/common';
+import { EntityManager, EntityRepository } from '@mikro-orm/postgresql';
 import { InboxMessage } from '@shared/domain/inbox/inbox-message.entity';
 
 export interface InboxMessagePayload {
@@ -7,8 +8,15 @@ export interface InboxMessagePayload {
   eventType: string;
 }
 
+@Injectable()
 export class InboxMessageRepository extends EntityRepository<InboxMessage> {
-  async storeInboxMessage(payload: InboxMessagePayload, schema?: string): Promise<InboxMessage> {
+  constructor(em: EntityManager) {
+    super(em, InboxMessage);
+  }
+  async storeInboxMessage(
+    payload: InboxMessagePayload,
+    schema?: string,
+  ): Promise<InboxMessage> {
     const entity = this.em.create(InboxMessage, payload, { schema });
     await this.em.persistAndFlush(entity);
     return entity;

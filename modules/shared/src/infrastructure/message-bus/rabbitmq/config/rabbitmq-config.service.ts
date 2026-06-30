@@ -16,8 +16,14 @@ export class RabbitmqConfigService {
     @Optional() @Inject(RABBITMQ_CONFIG) private moduleConfig: IRabbitMqConfig,
   ) {
     this.config = {
-      appName: this.configService.get<string>('app.name') || this.configService.get<string>('APP_NAME') || 'event-driven-order-engine',
-      dsn: this.configService.get<string>('rabbitmq.url') || process.env.RABBITMQ_URL || 'amqp://rabbit_user:rabbit_pass@localhost:5672',
+      appName:
+        this.configService.get<string>('app.name') ||
+        this.configService.get<string>('APP_NAME') ||
+        'event-driven-order-engine',
+      dsn:
+        this.configService.get<string>('rabbitmq.url') ||
+        process.env.RABBITMQ_URL ||
+        'amqp://rabbit_user:rabbit_pass@localhost:5672',
       heartbeatInterval: 30,
 
       delayedRetriesNumber: parseInt(
@@ -29,15 +35,18 @@ export class RabbitmqConfigService {
         10,
       ),
       retryQueueMessageTtl: parseInt(
-        this.configService.get<string>('RABBITMQ_RETRY_QUEUE_MESSAGE_TTL') || '5000',
+        this.configService.get<string>('RABBITMQ_RETRY_QUEUE_MESSAGE_TTL') ||
+          '5000',
         10,
       ),
       consumeMessageLimit: parseInt(
-        this.configService.get<string>('RABBITMQ_CONSUME_MESSAGE_LIMIT') || '10',
+        this.configService.get<string>('RABBITMQ_CONSUME_MESSAGE_LIMIT') ||
+          '10',
         10,
       ),
       dispatchMessageLimit: parseInt(
-        this.configService.get<string>('RABBITMQ_DISPATCH_MESSAGE_LIMIT') || '10',
+        this.configService.get<string>('RABBITMQ_DISPATCH_MESSAGE_LIMIT') ||
+          '10',
         10,
       ),
     };
@@ -55,25 +64,44 @@ export class RabbitmqConfigService {
   private overrideConfig(moduleConfig: IRabbitMqConfig) {
     if (moduleConfig.appName) this.config.appName = moduleConfig.appName;
 
-    if (moduleConfig.primaryQueue) this.config.primaryQueue = moduleConfig.primaryQueue;
-    if (moduleConfig.primaryQueueBindingKey) this.config.primaryQueueBindingKey = moduleConfig.primaryQueueBindingKey;
-    if (moduleConfig.primaryQueueExchange) this.config.primaryQueueExchange = moduleConfig.primaryQueueExchange;
-    if (moduleConfig.primaryQueueExchangeType) this.config.primaryQueueExchangeType = moduleConfig.primaryQueueExchangeType;
-    
-    if (moduleConfig.retryQueue) this.config.retryQueue = moduleConfig.retryQueue;
-    if (moduleConfig.retryQueueBindingKey) this.config.retryQueueBindingKey = moduleConfig.retryQueueBindingKey;
-    if (moduleConfig.retryQueueExchange) this.config.retryQueueExchange = moduleConfig.retryQueueExchange;
-    if (moduleConfig.retryQueueExchangeType) this.config.retryQueueExchangeType = moduleConfig.retryQueueExchangeType;
-    
-    if (moduleConfig.errorQueueRoutingKey) this.config.errorQueueRoutingKey = moduleConfig.errorQueueRoutingKey;
-    if (moduleConfig.errorQueueExchange) this.config.errorQueueExchange = moduleConfig.errorQueueExchange;
-    if (moduleConfig.errorQueueExchangeType) this.config.errorQueueExchangeType = moduleConfig.errorQueueExchangeType;
-    
-    if (moduleConfig.delayedRetriesNumber !== undefined) this.config.delayedRetriesNumber = moduleConfig.delayedRetriesNumber;
-    if (moduleConfig.immediateRetriesNumber !== undefined) this.config.immediateRetriesNumber = moduleConfig.immediateRetriesNumber;
-    if (moduleConfig.retryQueueMessageTtl !== undefined) this.config.retryQueueMessageTtl = moduleConfig.retryQueueMessageTtl;
-    if (moduleConfig.consumeMessageLimit !== undefined) this.config.consumeMessageLimit = moduleConfig.consumeMessageLimit;
-    if (moduleConfig.dispatchMessageLimit !== undefined) this.config.dispatchMessageLimit = moduleConfig.dispatchMessageLimit;
+    if (moduleConfig.primaryQueue)
+      this.config.primaryQueue = moduleConfig.primaryQueue;
+    if (moduleConfig.primaryQueueBindingKey)
+      this.config.primaryQueueBindingKey = moduleConfig.primaryQueueBindingKey;
+    if (moduleConfig.primaryQueueExchange)
+      this.config.primaryQueueExchange = moduleConfig.primaryQueueExchange;
+    if (moduleConfig.primaryQueueExchangeType)
+      this.config.primaryQueueExchangeType =
+        moduleConfig.primaryQueueExchangeType;
+
+    if (moduleConfig.retryQueue)
+      this.config.retryQueue = moduleConfig.retryQueue;
+    if (moduleConfig.retryQueueBindingKey)
+      this.config.retryQueueBindingKey = moduleConfig.retryQueueBindingKey;
+    if (moduleConfig.retryQueueExchange)
+      this.config.retryQueueExchange = moduleConfig.retryQueueExchange;
+    if (moduleConfig.retryQueueExchangeType)
+      this.config.retryQueueExchangeType = moduleConfig.retryQueueExchangeType;
+
+    if (moduleConfig.errorQueueRoutingKey)
+      this.config.errorQueueRoutingKey = moduleConfig.errorQueueRoutingKey;
+    if (moduleConfig.errorQueueExchange)
+      this.config.errorQueueExchange = moduleConfig.errorQueueExchange;
+    if (moduleConfig.errorQueueExchangeType)
+      this.config.errorQueueExchangeType = moduleConfig.errorQueueExchangeType;
+    if (moduleConfig.errorQueue)
+      this.config.errorQueue = moduleConfig.errorQueue;
+
+    if (moduleConfig.delayedRetriesNumber !== undefined)
+      this.config.delayedRetriesNumber = moduleConfig.delayedRetriesNumber;
+    if (moduleConfig.immediateRetriesNumber !== undefined)
+      this.config.immediateRetriesNumber = moduleConfig.immediateRetriesNumber;
+    if (moduleConfig.retryQueueMessageTtl !== undefined)
+      this.config.retryQueueMessageTtl = moduleConfig.retryQueueMessageTtl;
+    if (moduleConfig.consumeMessageLimit !== undefined)
+      this.config.consumeMessageLimit = moduleConfig.consumeMessageLimit;
+    if (moduleConfig.dispatchMessageLimit !== undefined)
+      this.config.dispatchMessageLimit = moduleConfig.dispatchMessageLimit;
   }
 
   async validateConfig() {
@@ -88,6 +116,7 @@ export class RabbitmqConfigService {
       'retryQueueExchange',
       'retryQueueExchangeType',
       'errorQueueRoutingKey',
+      'errorQueue',
       'delayedRetriesNumber',
       'immediateRetriesNumber',
       'retryQueueMessageTtl',
@@ -96,14 +125,19 @@ export class RabbitmqConfigService {
 
     const missingVariables = requiredVariables.filter(
       (variable) =>
-        (this.config as any)[variable] === undefined || (this.config as any)[variable] === null,
+        (this.config as any)[variable] === undefined ||
+        (this.config as any)[variable] === null,
     );
 
     if (missingVariables.length === 0) {
-      console.log(`All prerequisites are met for RabbitMQ for app: ${this.config.appName}`);
+      console.log(
+        `All prerequisites are met for RabbitMQ for app: ${this.config.appName}`,
+      );
     } else {
       missingVariables.forEach((variable) => {
-        console.log(`Missing required environment variable or config: ${variable}`);
+        console.log(
+          `Missing required environment variable or config: ${variable}`,
+        );
       });
       process.exit(1);
     }

@@ -24,7 +24,10 @@ export class DtoValidation extends BadRequestException {
           message: Object.values(error.constraints).join(', '),
         });
       } else if (error?.children?.length) {
-        const childMessages = this.extractMessages(error.children, propertyName);
+        const childMessages = this.extractMessages(
+          error.children,
+          propertyName,
+        );
         messages.push(...childMessages);
       }
     });

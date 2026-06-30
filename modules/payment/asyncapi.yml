@@ -1,0 +1,117 @@
+asyncapi: 3.0.0
+info:
+  title: Payment Module Events
+  version: 1.0.0
+  description: Event definitions published by the Payment Module of the Event-Driven Order Engine.
+servers:
+  rabbitMQ:
+    host: localhost:5673
+    protocol: amqp
+    description: Development RabbitMQ Broker
+operations:
+  payment.completed:
+    action: send
+    channel:
+      $ref: '#/channels/payment.completed'
+    messages:
+      - $ref: '#/channels/payment.completed/messages/publish.message'
+  payment.failed:
+    action: send
+    channel:
+      $ref: '#/channels/payment.failed'
+    messages:
+      - $ref: '#/channels/payment.failed/messages/publish.message'
+channels:
+  payment.completed:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: payment.completed
+    messages:
+      publish.message:
+        $ref: '#/components/messages/PaymentCompletedEvent'
+  payment.failed:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: payment.failed
+    messages:
+      publish.message:
+        $ref: '#/components/messages/PaymentFailedEvent'
+components:
+  messages:
+    PaymentCompletedEvent:
+      name: PaymentCompletedEvent
+      title: Payment Completed Event
+      summary: Published after payment is successfully captured for an order.
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/PaymentCompletedPayload'
+    PaymentFailedEvent:
+      name: PaymentFailedEvent
+      title: Payment Failed Event
+      summary: Published when payment capture fails (e.g. insufficient funds).
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/PaymentFailedPayload'
+  schemas:
+    PaymentCompletedPayload:
+      type: object
+      required:
+        - orderId
+        - paymentId
+        - amount
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        paymentId:
+          type: string
+          format: uuid
+          example: 807915c4-d91c-4cb1-91c0-fb074dc70d27
+        amount:
+          type: number
+          example: 60.00
+    PaymentFailedPayload:
+      type: object
+      required:
+        - orderId
+        - paymentId
+        - amount
+        - reason
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        paymentId:
+          type: string
+          format: uuid
+          example: 03bb2e9e-2220-4993-858f-9b6b60a7f6fc
+        amount:
+          type: number
+          example: 24.99
+        reason:
+          type: string
+          example: Insufficient funds (simulated payment failure)
+  messageTraits:
+    commonHeaders:
+      headers:
+        type: object
+        properties:
+          message_id:
+            type: string
+            format: uuid
+            example: 8c76601b-9921-4167-821c-eb7eefd4d041
+          type:
+            type: string
+            description: Message type (event name)
+            example: PaymentCompletedEvent
+          app_id:
+            type: string
+            example: event-driven-order-engine
+          timestamp:
+            type: string
+            format: date-time
+            example: '2026-06-30T05:00:00.000Z'

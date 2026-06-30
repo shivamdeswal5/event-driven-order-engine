@@ -3,6 +3,10 @@ import { ConfigModule } from '@nestjs/config';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { SharedModule } from '@shared/shared.module';
 import { OrderModule } from '@order/features/order.module';
+import { InventoryModule } from '@inventory/features/inventory.module';
+import { PaymentModule } from '@payment/features/payment.module';
+import { ShippingModule } from '@shipping/features/shipping.module';
+import { NotificationModule } from '@notification/features/notification.module';
 
 import {
   appConfig,
@@ -23,6 +27,10 @@ import mikroOrmConfig from '../mikro-orm.config';
     MikroOrmModule.forRoot(mikroOrmConfig),
     SharedModule,
     OrderModule,
+    InventoryModule,
+    PaymentModule,
+    ShippingModule,
+    NotificationModule,
   ],
   controllers: [],
   providers: [],

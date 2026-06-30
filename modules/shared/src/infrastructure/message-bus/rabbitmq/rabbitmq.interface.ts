@@ -17,6 +17,7 @@ export interface ConfigType {
   errorQueueRoutingKey?: string;
   errorQueueExchange?: string;
   errorQueueExchangeType?: string;
+  errorQueue?: string;
   delayedRetriesNumber: number;
   immediateRetriesNumber: number;
   retryQueueMessageTtl: number;
@@ -54,6 +55,7 @@ export interface RuntimeConfigOverrides {
   errorQueueExchange?: string;
   errorQueueExchangeType?: string;
   errorQueueRoutingKey?: string;
+  errorQueue?: string;
   appName?: string;
 }
 

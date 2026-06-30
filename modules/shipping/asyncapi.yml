@@ -1,0 +1,110 @@
+asyncapi: 3.0.0
+info:
+  title: Shipping Module Events
+  version: 1.0.0
+  description: Event definitions published by the Shipping Module of the Event-Driven Order Engine.
+servers:
+  rabbitMQ:
+    host: localhost:5673
+    protocol: amqp
+    description: Development RabbitMQ Broker
+operations:
+  shipping.created:
+    action: send
+    channel:
+      $ref: '#/channels/shipping.created'
+    messages:
+      - $ref: '#/channels/shipping.created/messages/publish.message'
+  shipping.delivered:
+    action: send
+    channel:
+      $ref: '#/channels/shipping.delivered'
+    messages:
+      - $ref: '#/channels/shipping.delivered/messages/publish.message'
+channels:
+  shipping.created:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: shipping.created
+    messages:
+      publish.message:
+        $ref: '#/components/messages/ShipmentCreatedEvent'
+  shipping.delivered:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: shipping.delivered
+    messages:
+      publish.message:
+        $ref: '#/components/messages/ShipmentDeliveredEvent'
+components:
+  messages:
+    ShipmentCreatedEvent:
+      name: ShipmentCreatedEvent
+      title: Shipment Created Event
+      summary: Published after a shipment is initialized for a fully paid order.
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ShipmentCreatedPayload'
+    ShipmentDeliveredEvent:
+      name: ShipmentDeliveredEvent
+      title: Shipment Delivered Event
+      summary: Published when a shipment is marked as successfully delivered.
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ShipmentDeliveredPayload'
+  schemas:
+    ShipmentCreatedPayload:
+      type: object
+      required:
+        - orderId
+        - shipmentId
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        shipmentId:
+          type: string
+          format: uuid
+          example: b07d4fa1-c910-48e2-9b2f-6a7e5dc70d27
+    ShipmentDeliveredPayload:
+      type: object
+      required:
+        - orderId
+        - shipmentId
+        - deliveredAt
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        shipmentId:
+          type: string
+          format: uuid
+          example: b07d4fa1-c910-48e2-9b2f-6a7e5dc70d27
+        deliveredAt:
+          type: string
+          format: date-time
+          example: '2026-06-30T05:25:00.000Z'
+  messageTraits:
+    commonHeaders:
+      headers:
+        type: object
+        properties:
+          message_id:
+            type: string
+            format: uuid
+            example: 8c76601b-9921-4167-821c-eb7eefd4d041
+          type:
+            type: string
+            description: Message type (event name)
+            example: ShipmentCreatedEvent
+          app_id:
+            type: string
+            example: event-driven-order-engine
+          timestamp:
+            type: string
+            format: date-time
+            example: '2026-06-30T05:00:00.000Z'

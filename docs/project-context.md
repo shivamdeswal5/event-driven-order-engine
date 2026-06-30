@@ -2,7 +2,7 @@
 
 > **Purpose**: This file provides full context for any AI assistant to continue working on this project. Share this file at the start of a new conversation to avoid repeating context.
 
-**Last Updated**: 2026-06-28
+**Last Updated**: 2026-06-30
 
 ---
 
@@ -102,16 +102,16 @@ modules/<module>/
     │       ├── <entity>.entity.ts             ← MikroORM entity with schema: process.env.DB_SCHEMA_<MODULE>
     │       ├── enum/
     │       │   └── <entity>-status.enum.ts    ← TypeScript enum
-    │       └── enum-mapper/
-    │           └── <entity>-status-mapper.ts  ← MikroORM Type: enum ↔ integer in DB
-    │   ├── events/
-    │   │   └── <event>.event.ts               ← Domain event implementing DomainEvent<TPayload>
-    │   └── exceptions/
-    │       └── exceptions.ts                  ← Domain exceptions (e.g. OrderNotFoundException)
+    │       ├── enum-mapper/
+    │       │   └── <entity>-status-mapper.ts  ← MikroORM Type: enum ↔ integer in DB
+    │       ├── events/
+    │       │   └── <event>.event.ts               ← Domain event implementing DomainEvent<TPayload>
+    │       └── exceptions/
+    │           └── <entity>.exceptions.ts         ← Domain exceptions (e.g. OrderNotFoundException)
     ├── features/
-    │   ├── order.module.ts                    ← Aggregating NestJS module (imports all feature slices)
+    │   ├── <module>.module.ts                 ← Aggregating NestJS module (imports all feature slices, NO EXPORTS)
     │   └── <feature>/
-    │       ├── <feature>.module.ts            ← Self-contained NestJS module for this slice
+    │       ├── <feature>.module.ts            ← Self-contained NestJS module for this slice (exports its own handler)
     │       ├── <feature>.controller.ts        ← HTTP controller (@Controller, @Post, @Get, etc.)
     │       ├── <feature>.dto.ts               ← class-validator DTO (HTTP input validation)
     │       ├── <feature>.command.ts           ← Immutable command/query class (CQRS)
@@ -125,7 +125,11 @@ modules/<module>/
         │       └── registry.ts               ← Registers mappers with the global exception filter
         ├── repository/
         │   └── <entity>.repository.ts        ← MikroORM EntityRepository wrapper class
-        └── processor/                         ← (Phase 4+) event consumer handlers
+        └── processors/                        ← Event consumer handlers
+            ├── <event-name>/
+            │   ├── <event-name>.processor.ts  ← Uses @Transactional() to write outbox/inbox
+            │   └── <event-name>.module.ts     ← Self-contained processor module
+            └── signature.types.service.ts     ← LazyLoadHandler registration
 ```
 
 ### Shared Module Structure
@@ -170,8 +174,10 @@ modules/shared/
 | Backend Schema | `docs/04-backend-schema.md` | All DB tables, columns, indexes, relationships |
 | Implementation Plan | `docs/05-implementation-plan.md` | 10-phase build plan with deliverables |
 | Migration Strategy | `docs/06-migration-strategy.md` | Per-module schema isolation, context-aware config, all migration commands |
+| Architecture Patterns | `docs/07-architecture-patterns.md` | Monolith modularity, DDD, CQRS, Inbox/Outbox patterns details |
+| Event Flow & Saga Map | `docs/08-event-flow-saga-map.md` | RabbitMQ topic routing, sequence diagrams, topology registry & routing contracts |
 | RabbitMQ Setup | `docs/rabbitmq-setup.md` | Full RabbitMQ architecture, topology, flow diagrams |
-| Concepts Deep Dive | `docs/concepts-deep-dive.md` | DDD, CQRS, RabbitMQ, Outbox, Docker explanations |
+| WebSocket Setup | `docs/websocket-setup.md` | WebSocket namespace, rooms subscription/broadcast, and integration details |
 
 ---
 
@@ -181,14 +187,14 @@ modules/shared/
 |-------|--------|-------------|
 | 1. Project Setup | ✅ Done | Docker, NestJS, MikroORM, CORS, env config |
 | 2. Shared Infrastructure | ✅ Done | Outbox/Inbox entities + repos, message bus, exceptions |
-| 3. Order Module | 🔄 In Progress | First domain module — Place Order done, next: domain exceptions, OrderRepository, GetOrder, ListOrders, CancelOrder, migration |
-| 4. Inventory Module | ⬜ Not Started | First inter-module flow |
-| 5. Payment Module | ⬜ Not Started | Saga trigger point |
-| 6. Shipping Module | ⬜ Not Started | Near-complete flow |
-| 7. Notification Module | ⬜ Not Started | Full flow |
-| 8. Saga & Compensation | ⬜ Not Started | Failure handling |
-| 9. Retry & DLQ | ⬜ Not Started | Resilience |
-| 10. Docs & Polish | ⬜ Not Started | OpenAPI, AsyncAPI, seed data |
+| 3. Order Module | ✅ Done | Domain, Features, Outbox writing, CLI worker |
+| 4. Inventory Module | ✅ Done | Subdomain entity structuring, Event Processors, 4 separated migrations |
+| 5. Payment Module | ✅ Done | Saga trigger point, domain entity scaffolding, and E2E choreography validation |
+| 6. Shipping Module | ✅ Done | Core flow, database schema, HTTP APIs, events, and E2E lifecycle/compensation testing |
+| 7. Notification Module | ✅ Done | Scaffolding, database schema, WebSocket gateway subscription, and timeline timeline REST endpoint |
+| 8. Saga & Compensation | ✅ Done | Rollback and progression processors, dynamic RabbitMQ bindings, and full E2E validation |
+| 9. Retry & DLQ | ⬜ Not Started | Resilience, DLQ setup, retry policies |
+| 10. Docs & Polish | ✅ Done | API OpenAPI and AsyncAPI specs, comprehensive docs setup |
 
 ---
 
@@ -201,12 +207,14 @@ modules/shared/
 - **Events**: past tense (`OrderPlacedEvent`) in `.event.ts`
 - **Controllers**: `.controller.ts` (NOT `.route.ts`)
 - **Feature modules**: each feature slice has its own `<feature>.module.ts`
-- **Aggregating module**: `modules/<module>/src/features/order.module.ts` named `OrderModule` imports all feature slices
+- **Aggregating module**: Parent modules (e.g., `OrderModule`, `InventoryModule`) import feature modules but **DO NOT export them**.
+- **Processors**: `infrastructure/processors/<event-name>/` — self-contained with their own module, lazy-loaded via `SignatureTypes`.
+- **Domain structure**: Organized strictly per-entity (events, exceptions, enums live inside their parent entity folder).
 - **Enum mappers**: in `domain/<entity>/enum-mapper/` — maps enum ↔ integer in DB
-- **Processors**: `handle-{event-name}.processor.ts` (Phase 4+)
 - **No cross-module DB queries** — events only
 - **Outbox pattern**: in handlers use `em.transactional()` to persist entity + `OutboxMessage` atomically
 - **Inbox dedup key**: `messageId + handlerName`
+- **Migrations**: Split migrations per-table within each module instead of one monolithic migration file.
 - **Schema naming**: singular (`order_schema` not `orders_schema`), matching folder name
 
 ---
@@ -246,14 +254,11 @@ docker compose logs -f backend                # View logs
 
 ## 11. Current Status
 
-- **Current Phase**: Phase 3 — Order Module (In Progress)
+- **Current Phase**: Phase 9 — Retry & DLQ (Pending)
 - **Last Completed**:
-  - Phase 2 (Shared Infrastructure) — complete
-  - Migration strategy setup — complete (`docs/06-migration-strategy.md`)
-  - Order entity, OrderStatus enum, OrderStatusMapper — complete
-  - Place Order feature slice (DTO → Command → Handler → Controller → Module) — complete
-  - `OrderModule` in `features/order.module.ts` — complete
-- **Next Step**: Step 3.3 — Domain exceptions (`OrderNotFoundException`, `InvalidOrderStateException`) → then `OrderRepository` → then `GetOrder` and `ListOrders` feature slices
+  - Phase 7 (Notification Module) — complete. Scaffolding, database schema migration, WebSocket room subscription, event timeline, and event consumers.
+  - Phase 8 (Saga & Compensation Choreography) — complete. Scaffolding rollback/progression processors, signature types routing, and full E2E validation.
+- **Next Step**: Start Phase 9 (Retry & DLQ).
 
 ---
 

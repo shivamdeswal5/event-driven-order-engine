@@ -31,6 +31,36 @@ export class ProducerService {
     await this.close();
   }
 
+  async startPublishing() {
+    await this.connect();
+  }
+
+  async finishPublishing() {
+    await this.close();
+  }
+
+  async publishSingleMessage(outboxMessage: OutboxMessage) {
+    const messageToPublish: RabbitMQPublishMessage = {
+      exchange:
+        outboxMessage.exchange || this.config.primaryQueueExchange || '',
+      bindingKey: outboxMessage.routingKey,
+      content: JSON.stringify(outboxMessage.payload),
+      properties: {
+        messageId: outboxMessage.id,
+        type: outboxMessage.eventType,
+        correlationId: outboxMessage.correlationId,
+        headers: {
+          causationId: outboxMessage.causationId,
+          type: outboxMessage.eventType,
+        },
+        persistent: true,
+      },
+    };
+
+    const isPublished = await this.connection.publish(messageToPublish);
+    if (!isPublished) throw new Error('Message could not be published.');
+  }
+
   private async connect() {
     await this.connection.connect();
     await this.rabbitmqConfigurerService.publisherTopologyConfigurer();
@@ -43,7 +73,8 @@ export class ProducerService {
   private async publisher(outboxMessage: OutboxMessage) {
     try {
       const messageToPublish: RabbitMQPublishMessage = {
-        exchange: outboxMessage.exchange || this.config.primaryQueueExchange || '',
+        exchange:
+          outboxMessage.exchange || this.config.primaryQueueExchange || '',
         bindingKey: outboxMessage.routingKey,
         content: JSON.stringify(outboxMessage.payload),
         properties: {

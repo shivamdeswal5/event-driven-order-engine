@@ -165,45 +165,48 @@ event-driven-order-engine/
 │   │   ├── test/
 │   │   └── src/
 │   │       ├── domain/
-│   │       │   ├── entities/
-│   │       │   │   └── order.entity.ts
-│   │       │   ├── enums/
-│   │       │   │   └── order-status.enum.ts
-│   │       │   ├── events/
-│   │       │   │   ├── order-placed.event.ts
-│   │       │   │   └── order-cancelled.event.ts
-│   │       │   └── exceptions/
-│   │       │       └── exceptions.ts
+│   │       │   └── order/
+│   │       │       ├── order.entity.ts
+│   │       │       ├── enum/
+│   │       │       │   └── order-status.enum.ts
+│   │       │       ├── enum-mapper/
+│   │       │       │   └── order-status-mapper.ts
+│   │       │       ├── events/
+│   │       │       │   ├── order-placed.event.ts
+│   │       │       │   └── order-cancelled.event.ts
+│   │       │       └── exceptions/
+│   │       │           └── order.exceptions.ts
 │   │       ├── features/
+│   │       │   ├── order.module.ts
 │   │       │   ├── place-order/
 │   │       │   │   ├── place-order.command.ts
 │   │       │   │   ├── place-order.handler.ts
-│   │       │   │   ├── place-order.route.ts
-│   │       │   │   └── place-order.dto.ts
+│   │       │   │   ├── place-order.controller.ts
+│   │       │   │   ├── place-order.dto.ts
+│   │       │   │   └── place-order.module.ts
 │   │       │   ├── get-order/
 │   │       │   │   ├── get-order.query.ts
 │   │       │   │   ├── get-order.handler.ts
-│   │       │   │   └── get-order.route.ts
+│   │       │   │   └── get-order.controller.ts
 │   │       │   ├── list-orders/
 │   │       │   │   ├── list-orders.query.ts
 │   │       │   │   ├── list-orders.handler.ts
-│   │       │   │   └── list-orders.route.ts
+│   │       │   │   └── list-orders.controller.ts
 │   │       │   └── cancel-order/
 │   │       │       ├── cancel-order.command.ts
 │   │       │       ├── cancel-order.handler.ts
-│   │       │       └── cancel-order.route.ts
+│   │       │       └── cancel-order.controller.ts
 │   │       └── infrastructure/
+│   │           ├── database/
+│   │           │   └── migrations/
 │   │           ├── message-bus/
 │   │           │   ├── order.message-destination.ts
-│   │           │   └── rabbitmq/
-│   │           │       ├── config/
-│   │           │       ├── producer/
-│   │           │       └── consumer/
+│   │           │   └── order.message-destination.module.ts
 │   │           ├── processors/
-│   │           │   ├── handle-payment-completed.processor.ts
-│   │           │   ├── handle-payment-failed.processor.ts
-│   │           │   ├── handle-shipment-created.processor.ts
-│   │           │   └── signature.types.ts
+│   │           │   ├── payment-completed/
+│   │           │   ├── payment-failed/
+│   │           │   ├── shipment-created/
+│   │           │   └── signature.types.service.ts
 │   │           └── http/
 │   │               └── exceptions/
 │   │                   ├── registry.ts
@@ -214,9 +217,37 @@ event-driven-order-engine/
 │   │   ├── asyncapi.yml
 │   │   ├── test/
 │   │   └── src/
-│   │       ├── domain/...
-│   │       ├── features/...
-│   │       └── infrastructure/...
+│   │       ├── domain/
+│   │       │   ├── product/
+│   │       │   │   ├── product.entity.ts
+│   │       │   │   ├── events/
+│   │       │   │   └── exceptions/
+│   │       │   └── reservation/
+│   │       │       ├── inventory-reservation.entity.ts
+│   │       │       ├── enum/
+│   │       │       ├── enum-mapper/
+│   │       │       ├── events/
+│   │       │       └── exceptions/
+│   │       ├── features/
+│   │       │   ├── inventory.module.ts
+│   │       │   ├── add-product/
+│   │       │   ├── get-product/
+│   │       │   ├── list-products/
+│   │       │   └── update-stock/
+│   │       └── infrastructure/
+│   │           ├── database/
+│   │           │   └── migrations/
+│   │           ├── message-bus/
+│   │           │   ├── inventory.message-destination.ts
+│   │           │   └── inventory.message-destination.module.ts
+│   │           ├── processors/
+│   │           │   ├── order-placed/
+│   │           │   ├── order-cancelled/
+│   │           │   └── signature.types.service.ts
+│   │           └── http/
+│   │               └── exceptions/
+│   │                   ├── registry.ts
+│   │                   └── mappers.ts
 │   │
 │   ├── payment/
 │   │   ├── openapi.yml

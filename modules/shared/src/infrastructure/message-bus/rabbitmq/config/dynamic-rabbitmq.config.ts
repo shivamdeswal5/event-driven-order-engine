@@ -2,7 +2,9 @@ import { Injectable, Type } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IRabbitMqConfig } from './rabbitmq-config.interface';
 
-export function createDynamicRabbitMqConfig(moduleName: string): Type<IRabbitMqConfig> {
+export function createDynamicRabbitMqConfig(
+  moduleName: string,
+): Type<IRabbitMqConfig> {
   const upper = moduleName.toUpperCase();
 
   @Injectable()
@@ -25,8 +27,9 @@ export function createDynamicRabbitMqConfig(moduleName: string): Type<IRabbitMqC
 
     get primaryQueueBindingKey(): string {
       return (
-        this.configService.get<string>(`RABBITMQ_${upper}_EVENTS_QUEUE_BINDING_KEY`) ||
-        `${moduleName}.*`
+        this.configService.get<string>(
+          `RABBITMQ_${upper}_EVENTS_QUEUE_BINDING_KEY`,
+        ) || `${moduleName}.*`
       );
     }
 
@@ -46,15 +49,17 @@ export function createDynamicRabbitMqConfig(moduleName: string): Type<IRabbitMqC
 
     get retryQueue(): string {
       return (
-        this.configService.get<string>(`RABBITMQ_${upper}_EVENTS_RETRY_QUEUE`) ||
-        `${moduleName}-retry-queue`
+        this.configService.get<string>(
+          `RABBITMQ_${upper}_EVENTS_RETRY_QUEUE`,
+        ) || `${moduleName}-retry-queue`
       );
     }
 
     get retryQueueBindingKey(): string {
       return (
-        this.configService.get<string>(`RABBITMQ_${upper}_EVENTS_RETRY_QUEUE_BINDING_KEY`) ||
-        `${moduleName}-retry-routing-key`
+        this.configService.get<string>(
+          `RABBITMQ_${upper}_EVENTS_RETRY_QUEUE_BINDING_KEY`,
+        ) || `${moduleName}-retry-routing-key`
       );
     }
 
@@ -76,6 +81,14 @@ export function createDynamicRabbitMqConfig(moduleName: string): Type<IRabbitMqC
       return (
         this.configService.get<string>('RABBITMQ_ERROR_QUEUE_ROUTING_KEY') ||
         `${moduleName}.error`
+      );
+    }
+
+    get errorQueue(): string {
+      return (
+        this.configService.get<string>(
+          `RABBITMQ_${upper}_EVENTS_ERROR_QUEUE`,
+        ) || `${moduleName}-error-queue`
       );
     }
 
@@ -104,17 +117,23 @@ export function createDynamicRabbitMqConfig(moduleName: string): Type<IRabbitMqC
     }
 
     get retryQueueMessageTtl(): number {
-      const val = this.configService.get<string>('RABBITMQ_RETRY_QUEUE_MESSAGE_TTL');
+      const val = this.configService.get<string>(
+        'RABBITMQ_RETRY_QUEUE_MESSAGE_TTL',
+      );
       return val !== undefined ? parseInt(val, 10) : 5000;
     }
 
     get consumeMessageLimit(): number {
-      const val = this.configService.get<string>('RABBITMQ_CONSUME_MESSAGE_LIMIT');
+      const val = this.configService.get<string>(
+        'RABBITMQ_CONSUME_MESSAGE_LIMIT',
+      );
       return val !== undefined ? parseInt(val, 10) : 10;
     }
 
     get dispatchMessageLimit(): number {
-      const val = this.configService.get<string>('RABBITMQ_DISPATCH_MESSAGE_LIMIT');
+      const val = this.configService.get<string>(
+        'RABBITMQ_DISPATCH_MESSAGE_LIMIT',
+      );
       return val !== undefined ? parseInt(val, 10) : 10;
     }
   }

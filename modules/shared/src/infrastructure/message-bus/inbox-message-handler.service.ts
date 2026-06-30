@@ -33,7 +33,9 @@ export class InboxMessageHandler {
     const handlers = signatureTypes[message_type];
 
     if (!handlers) {
-      console.log(`INFO No handler registered for message type: ${message_type}`);
+      console.log(
+        `INFO No handler registered for message type: ${message_type}`,
+      );
       return;
     }
 

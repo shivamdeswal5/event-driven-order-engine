@@ -1,0 +1,76 @@
+asyncapi: 3.0.0
+info:
+  title: Notification Module Events
+  version: 1.0.0
+  description: Real-time event streaming interface and channel descriptions for the Notification Module.
+servers:
+  webSocketGateway:
+    host: localhost:8080
+    pathname: /notifications
+    protocol: wss
+    description: Development WebSocket Gateway (Socket.io Namespace)
+channels:
+  subscribeToOrder:
+    address: subscribeToOrder
+    messages:
+      subscribePayload:
+        $ref: '#/components/messages/SubscribeToOrderMessage'
+  notification:
+    address: notification
+    messages:
+      notificationPayload:
+        $ref: '#/components/messages/NotificationMessage'
+operations:
+  receiveSubscription:
+    action: receive
+    channel:
+      $ref: '#/channels/subscribeToOrder'
+    messages:
+      - $ref: '#/channels/subscribeToOrder/messages/subscribePayload'
+  sendNotification:
+    action: send
+    channel:
+      $ref: '#/channels/notification'
+    messages:
+      - $ref: '#/channels/notification/messages/notificationPayload'
+components:
+  messages:
+    SubscribeToOrderMessage:
+      name: SubscribeToOrderMessage
+      title: Subscribe to Order updates
+      summary: Client payload to subscribe to updates for a specific order.
+      payload:
+        type: object
+        required:
+          - orderId
+        properties:
+          orderId:
+            type: string
+            format: uuid
+            example: 2d9c6d91-d051-4fe1-9ea5-36711f8262a5
+    NotificationMessage:
+      name: NotificationMessage
+      title: Real-time Notification
+      summary: Server-pushed order status update event.
+      payload:
+        type: object
+        required:
+          - orderId
+          - eventType
+          - message
+          - occurredAt
+        properties:
+          orderId:
+            type: string
+            format: uuid
+            example: 2d9c6d91-d051-4fe1-9ea5-36711f8262a5
+          eventType:
+            type: string
+            example: OrderPlacedEvent
+          message:
+            type: string
+            example: Order 2d9c6d91-d051-4fe1-9ea5-36711f8262a5 has been successfully placed.
+          occurredAt:
+            type: string
+            format: date-time
+            example: '2026-06-30T05:15:30.000Z'

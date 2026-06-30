@@ -16,6 +16,7 @@ export interface IRabbitMqConfig {
   errorQueueRoutingKey?: string;
   errorQueueExchange?: string;
   errorQueueExchangeType?: string;
+  errorQueue?: string;
 
   delayedRetriesNumber?: number;
   immediateRetriesNumber?: number;

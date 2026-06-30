@@ -47,6 +47,7 @@ export class ConsumerService {
       errorQueueExchange: options.errorQueueExchange,
       errorQueueExchangeType: options.errorQueueExchangeType,
       errorQueueRoutingKey: options.errorQueueRoutingKey,
+      errorQueue: options.errorQueue,
       appName: options.appName,
     });
 
@@ -57,7 +58,9 @@ export class ConsumerService {
     this.channel = this.connection.getChannel();
     this.signatureTypes = Object.keys(this.messageHandler.getSignatureTypes());
     await this.channel?.prefetch(this.prefetchLimit);
-    await this.rabbitmqConfigurerService.consumerTopologyConfigurer();
+    await this.rabbitmqConfigurerService.consumerTopologyConfigurer(
+      this.signatureTypes,
+    );
     await this.startConsuming();
     console.log(
       `Waiting for messages in ${this.config.primaryQueue}...`,
@@ -83,7 +86,9 @@ export class ConsumerService {
 
   async startConsuming() {
     if (!this.channel) {
-      console.warn('WARNING: Cannot start consuming, channel is not available.');
+      console.warn(
+        'WARNING: Cannot start consuming, channel is not available.',
+      );
       return;
     }
     await this.channel.consume(

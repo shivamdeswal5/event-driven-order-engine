@@ -416,22 +416,18 @@ Every 5 seconds (configurable):
 Success (200):
 {
   "status": "healthy",
-  "timestamp": "2026-06-25T10:00:00Z",
-  "services": {
-    "database": { "status": "up", "latency": "2ms" },
-    "rabbitmq": { "status": "up", "latency": "5ms" },
-    "outboxRelay": {
-      "status": "up",
-      "lastPollAt": "2026-06-25T09:59:55Z",
-      "pendingMessages": 0
-    }
+  "timestamp": "2026-06-30T11:21:57.102Z",
+  "details": {
+    "database": { "status": "up" },
+    "rabbitmq": { "status": "up" }
   }
 }
 
-Degraded (503):
+Unhealthy (503):
 {
-  "status": "degraded",
-  "services": {
+  "status": "unhealthy",
+  "timestamp": "2026-06-30T11:21:57.102Z",
+  "details": {
     "database": { "status": "up" },
     "rabbitmq": { "status": "down", "error": "Connection refused" }
   }

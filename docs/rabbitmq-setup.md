@@ -246,12 +246,12 @@ This function is responsible for preparing the message broker for **sending (pub
 
 ---
 
-##### 2. `consumerTopologyConfigurer()`
-This function is responsible for preparing the message broker for **receiving (consuming) events**. It sets up the primary queue, the retry queue, and links them with the correct exchanges.
+##### 2. `consumerTopologyConfigurer(signatureTypes: string[] = [])`
+This function is responsible for preparing the message broker for **receiving (consuming) events**. It dynamically binds the primary queue to the exchanges and routing keys of all consumed signature types.
 
 * **The Code**:
   ```typescript
-  async consumerTopologyConfigurer() {
+  async consumerTopologyConfigurer(signatureTypes: string[] = []) {
     // 1. Declare the Retry Exchange
     if (this.config.retryQueueExchange) {
       await this.connection.exchange(
@@ -267,7 +267,7 @@ This function is responsible for preparing the message broker for **receiving (c
       );
     }
 
-    // 3. Declare and bind the Primary Queue
+    // 3. Declare the Primary Queue
     if (this.config.primaryQueue && this.config.primaryQueueExchange) {
       await this.connection.queue(
         this.config.primaryQueueExchange,
@@ -277,7 +277,29 @@ This function is responsible for preparing the message broker for **receiving (c
       );
     }
 
-    // 4. Declare and bind the Retry Queue
+    // 4. Dynamically Bind Consumer to Registered Signature Types
+    for (const signatureType of signatureTypes) {
+      const destination = this.messageDestinationRegistry.get(signatureType);
+      if (destination) {
+        // Assert the target event's exchange
+        await this.connection.exchange(
+          destination.exchange,
+          'topic',
+        );
+        // Bind primary queue to that exchange with routing key
+        if (this.config.primaryQueue) {
+          console.log(`[Topology] Binding queue ${this.config.primaryQueue} to exchange ${destination.exchange} with routing key ${destination.routingKey}`);
+          await this.connection.queue(
+            destination.exchange,
+            this.config.primaryQueue,
+            { durable: true },
+            destination.routingKey,
+          );
+        }
+      }
+    }
+
+    // 5. Declare and bind the Retry Queue
     if (this.config.retryQueue && this.config.retryQueueExchange) {
       await this.connection.queue(
         this.config.retryQueueExchange,
@@ -296,14 +318,12 @@ This function is responsible for preparing the message broker for **receiving (c
   }
   ```
 * **Step-by-Step Explanation**:
-  - **Step 1: Declare Retry Exchange**: Creates the exchange used for retrying messages. It defaults to `'direct'` routing (routing directly to queues based on exact key matching).
+  - **Step 1: Declare Retry Exchange**: Creates the exchange used for retrying messages. It defaults to `'direct'` routing.
   - **Step 2: Declare Primary Exchange**: Declares the main exchange (e.g., `'order-exchange'`) of type `'topic'`.
-  - **Step 3: Declare & Bind Primary Queue**: Creates the queue (e.g., `'order-queue'`) where the worker will listen for incoming events. It is set as `durable: true` (persists on RabbitMQ restart). It is bound to the `primaryQueueExchange` so any messages matching the routing key flow into this queue.
-  - **Step 4: Declare & Bind Retry Queue**: Creates the retry queue (e.g., `'order-retry-queue'`). This queue contains special properties:
-    - **`deadLetterExchange`**: Configured to route expired messages back to the `primaryQueueExchange`.
-    - **`messageTtl`**: Sets the delay duration (e.g., 5 seconds). After this time, messages expire.
-    - **`deadLetterRoutingKey`**: Directs the expired message back to the primary queue.
-* **Why we need this**: It maps the consumer's ingress pipeline. Without this, there is no queue to subscribe to, and no retry mechanisms to process failed events.
+  - **Step 3: Declare Primary Queue**: Creates the queue (e.g., `'order-queue'`) where the worker listens for incoming events. It is set as `durable: true`.
+  - **Step 4: Dynamic Queue Binding**: Iterates over the active subscriber's `signatureTypes`. For each event type, it fetches routing info (exchange/key) from `MessageDestinationRegistry`, asserts the source exchange, and binds the primary queue to it. This supports complex multi-exchange choreography dynamically.
+  - **Step 5: Declare & Bind Retry Queue**: Creates the retry queue (e.g., `'order-retry-queue'`) with dead-letter attributes for retry logic.
+* **Why we need this**: It dynamicizes the consumer's ingress pipeline. Rather than hardcoding bindings or suffering topology validation conflicts, it configures queue-to-exchange routes automatically on worker boot based on registered inbox handlers.
 
 ---
 
@@ -390,13 +410,105 @@ The `LazyLoadHandler` breaks this cycle entirely using NestJS's `LazyModuleLoade
 
 ---
 
-#### `message-destination-registry.ts`
+#### `message-destination-registry.ts` & `message-destination.module.ts`
 
-When the outbox relay picks up a pending outbox message with `event_type: 'OrderPlacedEvent'`, it needs to know two things: which **exchange** to publish to, and which **routing key** to use. Hardcoding this in the relay service would mean the relay knows too much about domain-specific event routing — violating separation of concerns.
+When a domain feature triggers a state change (e.g., `PlaceOrder`), it saves a domain event (e.g., `OrderPlacedEvent`) into the `outbox_messages` database table. The background outbox relay subsequently queries this table to publish the event to RabbitMQ. 
 
-The `MessageDestinationRegistry` is a global singleton map that solves this. When the Order module registers its event destinations on startup (e.g. `registry.register('OrderPlacedEvent', { exchange: 'order-exchange', routingKey: 'order.placed' })`), the relay can later just do a lookup: `registry.getDestination(eventType)` and get back the routing information without knowing anything about the Order module itself.
+However, we face a crucial architectural problem: **how does the outbox relay know which RabbitMQ Exchange and Routing Key to use for a given event type?**
+* If we hardcode routing rules in the shared relay service, the shared module becomes tightly coupled to every single domain event in the system. Every time a developer adds a new event, they would have to modify the shared infrastructure code.
+* The Domain Layer itself must remain completely pure and decoupled from infrastructure concerns (like RabbitMQ connection structures, exchanges, and routing keys).
 
-Being a `@Global()` module means it is instantiated once and its registry instance is shared across the entire NestJS application, making it a safe, in-memory, single-source-of-truth for event routing configuration.
+To solve this, we use the **Registry Pattern**, implemented via the `MessageDestinationRegistry` class and the `@Global()` `MessageDestinationModule`.
+
+##### 1. The Message Destination Registry (`message-destination-registry.ts`)
+
+The registry acts as an in-memory, thread-safe central routing table. It registers mappings from **Event Types** (represented as strings, e.g., `'OrderPlacedEvent'`) to **Message Destinations** (an object specifying the RabbitMQ `exchange` and `routingKey`).
+
+###### Code Structure and Key Mechanisms:
+```typescript
+export interface MessageDestination {
+  exchange: string;
+  routingKey: string;
+}
+
+@Injectable()
+export class MessageDestinationRegistry {
+  // Static instance to enforce singleton registry mapping globally
+  static instance: MessageDestinationRegistry;
+  private readonly mappings: Map<string, MessageDestination> = new Map();
+
+  constructor() {
+    if (!MessageDestinationRegistry.instance) {
+      MessageDestinationRegistry.instance = this;
+    }
+  }
+
+  // Registers a mapping from an event type string to its RabbitMQ destination
+  register(eventType: string, destination: MessageDestination): void {
+    if (MessageDestinationRegistry.instance && MessageDestinationRegistry.instance !== this) {
+      return MessageDestinationRegistry.instance.register(eventType, destination);
+    }
+    this.mappings.set(eventType, destination);
+  }
+
+  // Resolves the destination for a given event type
+  get(eventType: string): MessageDestination | undefined {
+    if (MessageDestinationRegistry.instance && MessageDestinationRegistry.instance !== this) {
+      return MessageDestinationRegistry.instance.get(eventType);
+    }
+    return this.mappings.get(eventType);
+  }
+}
+```
+
+###### Key Design Decisions:
+* **The Singleton Fallback (`MessageDestinationRegistry.instance`)**: During NestJS integration tests or CLI command bootstrapping, multiple dependency injection (DI) contexts might be created. To prevent the registry from losing its mapped data, the class implements a static fallback mechanism. If a secondary instance of the registry is constructed, its `register` and `get` operations are routed to the primary static instance, ensuring the global routing table remains consistent.
+* **Separation of Concerns**: The outbox relay doesn't know *why* a message is routed to an exchange; it simply asks the registry `registry.get(message.eventType)` and gets the required envelope headers.
+
+---
+
+##### 2. The Message Destination Module (`message-destination.module.ts`)
+
+To make this registry easily accessible across all feature domains (such as `Order`, `Payment`, `Inventory`) and shared components, it is wrapped in the `MessageDestinationModule`:
+
+```typescript
+@Global()
+@Module({
+  providers: [MessageDestinationRegistry],
+  exports: [MessageDestinationRegistry],
+})
+export class MessageDestinationModule {}
+```
+
+###### Why is it `@Global()`?
+In NestJS, by default, modules are encapsulated. If the `OrderModule` wants to use a service defined in `SharedModule`, the `OrderModule` must explicitly add `SharedModule` to its `imports` array. 
+
+By marking `MessageDestinationModule` with the `@Global()` decorator, we instruct NestJS to make the `MessageDestinationRegistry` provider available **globally** in the dependency injection container. 
+* **Zero Imports**: Feature modules can inject `MessageDestinationRegistry` directly in their constructor (`constructor(private registry: MessageDestinationRegistry)`) without needing to import any modules.
+* **Decoupled Registration**: Domain modules register their event routes at startup simply by injecting the registry inside their own module configuration files (e.g. `order.message-destination.module.ts`).
+
+---
+
+##### Event Registration & Publishing Flow Diagram
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant OrderModule as Order Message Module
+    participant Registry as MessageDestinationRegistry (Global)
+    participant Outbox as Outbox Relay Service
+    participant Rabbit as RabbitMQ Broker
+
+    Note over OrderModule, Registry: Startup Phase
+    OrderModule->>Registry: register('OrderPlacedEvent', { exchange: 'order-exchange', routingKey: 'order.placed' })
+    
+    Note over Outbox, Rabbit: Outbox Processing Loop
+    Outbox->>Outbox: Poll DB for unprocessed outbox rows
+    Outbox->>Registry: get('OrderPlacedEvent')
+    Registry-->>Outbox: return { exchange: 'order-exchange', routingKey: 'order.placed' }
+    Outbox->>Rabbit: Publish event payload to exchange with routingKey
+    Outbox->>Outbox: Mark database outbox row as processed
+```
 
 ---
 
@@ -470,14 +582,14 @@ Here is a side-by-side comparison of the two approaches as the project scales:
 
 ```mermaid
 graph TD
-    subgraph Option A (Residency Pattern)
+    subgraph "Option A (Residency Pattern)"
         R1[module.map.ts] --> M1[OrderProducerModule]
         R1 --> M2[OrderConsumerModule]
         R1 --> M3[PaymentProducerModule]
         R1 --> M4[PaymentConsumerModule]
         style R1 fill:#f9f,stroke:#333,stroke-width:2px
     end
-    subgraph Option B (Dynamic Orchestration)
+    subgraph "Option B (Dynamic Orchestration)"
         R2[module.map.ts with dynamic helpers] -.-> DM1["Dynamic Producer (Order)"]
         R2 -.-> DM2["Dynamic Consumer (Order)"]
         R2 -.-> DM3["Dynamic Producer (Payment)"]
@@ -558,6 +670,7 @@ Here is a step-by-step walkthrough of the code in our [module.map.ts](file:///ho
            load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
          }),
          MikroOrmModule.forRoot(mikroOrmConfig),
+         SharedModule, // Injects transactional outbox, inbox, and other core helpers
          ProducerModule.forRoot(configClass),
          destinationModule,
        ],
@@ -569,6 +682,7 @@ Here is a step-by-step walkthrough of the code in our [module.map.ts](file:///ho
    ```
    - **What it does**: It dynamically defines a NestJS class decorated with `@Module`.
    - **Why it's needed**: When the CLI runs `dispatch-messages --module order`, it needs a NestJS container that boots environment variables (`ConfigModule`), connects to PostgreSQL (`MikroOrmModule`), and sets up the event dispatchers (`ProducerModule`).
+   - **Why `SharedModule` is included**: Since the dynamic module acts as the isolated root module of the CLI process, it must import `SharedModule` to resolve global shared providers like `OutboxMessageRepository` and `RabbitmqConnectionService`. Otherwise, NestJS will throw dependency resolution errors at runtime.
    - **How it saves work**: Instead of writing a new physical producer module class for every domain module, this function generates the class in memory at boot time.
 
 2. **The Dynamic Consumer Module Creator (`createConsumerCliModule`)**:
@@ -584,6 +698,7 @@ Here is a step-by-step walkthrough of the code in our [module.map.ts](file:///ho
            load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
          }),
          MikroOrmModule.forRoot(mikroOrmConfig),
+         SharedModule, // Injects transactional inbox, outbox, and other core helpers
          ConsumerModule.forSignatureTypes(signatureTypes, configClass),
          destinationModule,
        ],
@@ -595,20 +710,200 @@ Here is a step-by-step walkthrough of the code in our [module.map.ts](file:///ho
    ```
    - **What it does**: It dynamically creates a NestJS consumer class decorated with `@Module`.
    - **Why it's needed**: When the CLI daemon runs `handle-messages --module order`, it needs database connectivity, queue subscriber configurations (`ConsumerModule`), and the mappings of event types to handlers (`signatureTypes`).
+   - **Why `SharedModule` is included**: The consumer daemon runs handlers that perform message deduplication using `InboxMessageRepository` and dispatch subsequent integration events via `OutboxMessageRepository`. Both repositories and their dependencies are provided by `SharedModule`, making its inclusion in imports mandatory.
 
 3. **The Mappings (`CONSUMER_MODULE_MAP` / `PRODUCER_MODULE_MAP`)**:
    ```typescript
    export const CONSUMER_MODULE_MAP: Record<string, any> = {
      order: createConsumerCliModule('order', OrderSignatureTypes, OrderMessageDestinationModule),
+     inventory: createConsumerCliModule('inventory', InventorySignatureTypes, InventoryMessageDestinationModule),
    };
 
    export const PRODUCER_MODULE_MAP: Record<string, any> = {
      order: createProducerCliModule('order', OrderMessageDestinationModule),
+     inventory: createProducerCliModule('inventory', InventoryMessageDestinationModule),
    };
    ```
    - **What it does**: This behaves exactly like `residency-backend`'s mapping. But instead of importing physical files, it invokes our helper functions to create the required NestJS modules on the fly. 
 
 This gives us the best of both worlds: a clean domain folder structure, a centralized place to control all dynamic worker setup, and zero boilerplate!
+
+---
+
+##### 3.6.2 Beginner-Friendly Guide to Option B Architecture
+
+If you are new to event-driven architectures, Option B might seem slightly more complex in `module.map.ts`, but it is much simpler overall because it keeps the rest of your project completely clean. Let's break down the core concepts with real-world analogies:
+
+###### 1. Pure Domain Slices (The Chef Analogy)
+*   **The Idea**: The `Order` module is a "Domain Slice". It contains business logic: checking order details, changing statuses, and updating values. It should not contain folders like `rabbitmq`, `queues`, or connection configuration files.
+*   **Analogy**: Think of the `Order` module as a **Chef in a kitchen**. The chef's only job is to cook the food (business logic). The chef should not care whether the food is delivered to the customer via a bicycle, a car, or a drone (the message broker transport). If you put delivery boxes and gas tanks (RabbitMQ configuration files) inside the kitchen, the kitchen becomes cluttered and hard to work in. By keeping the domain slice "pure", we keep our kitchen clean.
+
+###### 2. Dynamic Configuration (The Smart Assistant Analogy)
+*   **The Idea**: In traditional setups, you must write a config file for every module (e.g. `order-rabbitmq.config.ts`, `payment-rabbitmq.config.ts`). In Option B, `SharedModule` provides a single, smart config class factory `createDynamicRabbitMqConfig`. It reads your `.env` file and dynamically creates a configuration prefix-aware class at runtime. If you ask for `'order'`, it automatically searches for environment variables starting with `RABBITMQ_ORDER_` (e.g. `RABBITMQ_ORDER_QUEUE`). If those aren't found, it falls back to global default configurations.
+*   **Analogy**: Instead of writing separate manuals for each appliance in your house, you hire a **Smart Assistant**. When you buy a microwave, you tell the assistant: *"Help me set up the microwave."* The assistant automatically looks for microwave-specific instructions in your house rules. If none are specified, the assistant uses the standard default appliance rules. You only have to write the assistant's instructions once!
+
+###### 3. Dynamic CLI Modules (The On-Demand Assembly Line)
+*   **The Idea**: To run background workers, NestJS needs wrapper modules to boot. In Option A, you had to write physical files like `OrderConsumerModule` and `OrderProducerModule` just to declare these modules. In Option B, `module.map.ts` uses the `createProducerCliModule` and `createConsumerCliModule` functions. These are factory functions that compile and output fully-fledged NestJS modules in memory at runtime when a CLI command is executed.
+*   **Analogy**: Think of an **Assembly Line**. Instead of building separate factories to build red cars, blue cars, and green cars, you build a single dynamic factory. When a request comes in for a "red car", the factory dynamically configures the assembly line, builds the red car, and delivers it on demand.
+
+---
+
+##### 3.6.3 Deep Dive: How the Producer and Consumer Modules Work and Run
+
+To make the system event-driven, we run two different types of background workers: **Producers** and **Consumers**. Here is a detailed breakdown of how they work, how they are structured, and how they run.
+
+---
+
+###### 1. The Producer Worker (`dispatch-messages`)
+
+The **Producer** is responsible for sending events from our database outbox to RabbitMQ. It acts as the "mail carrier" of our application.
+
+```
+                           PRODUCER WORKFLOW (dispatch-messages)
+                           
+   ┌──────────────────┐       Reads unsent        ┌───────────────────────┐
+   │  PostgreSQL DB   │ ────────────────────────> │ Outbox Relay Service  │
+   │ (outbox_messages)│ <──────────────────────── │ (Dynamic CLI Module)  │
+   └──────────────────┘      Marks processed      └───────────┬───────────┘
+                                                              │
+                                                              │ Publishes event
+                                                              ▼
+                                                   ┌───────────────────────┐
+                                                   │    RabbitMQ Broker    │
+                                                   └───────────────────────┘
+```
+
+*   **What it does**: 
+    1. It boots the NestJS DI container containing the `MikroOrmModule` (for database access), the `ProducerModule` (for RabbitMQ connections), and the event registry.
+    2. The `OutboxMessageRelayService` runs a query on the `outbox_messages` table to find rows where `processed = false`.
+    3. It publishes these messages to RabbitMQ using the exchange and routing key resolved from `MessageDestinationRegistry`.
+    4. Once RabbitMQ confirms the receipt, the relay marks the row as `processed = true`.
+*   **How it runs**:
+    *   It is run via the CLI command:
+        ```bash
+        npx ts-node -r tsconfig-paths/register modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts dispatch-messages --module order --schema order
+        ```
+
+##### Step-by-Step File Execution Flow (Producer)
+
+When you run the above producer command, the execution flows sequentially through these files:
+
+```mermaid
+graph TD
+    A["1. Entrypoint:<br>command-handler.ts"] -->|Parses command & module arg| B["2. CLI Factory Mapper:<br>module.map.ts"]
+    B -->|Compiles Dynamic Module & Injects Database/RabbitMQ configs| C["3. CLI Command definition:<br>dispatch-messages.ts"]
+    C -->|Invokes run() method| D["4. Background Outbox Poller:<br>outbox-message-relay.service.ts"]
+    D -->|Queries unsent outbox rows from DB & resolves destination via MessageDestinationRegistry| E["5. RabbitMQ Publisher Driver:<br>rabbitmq-producer.service.ts"]
+    E -->|Publishes message & awaits acknowledgement| F["6. PostgreSQL Outbox Table"]
+    F -->|Once ACK is confirmed, marks row as processed = true| D
+```
+
+1. **Entrypoint File**: [command-handler.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts)
+   * This is the main CLI wrapper file. It initializes `CommandFactory.run()` from `nest-commander` and bootstraps the main CLI environment.
+2. **CLI Module Factory Mapper**: [module.map.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/cli-commands/module.map.ts)
+   * `nest-commander` reads the `--module order` argument.
+   * It looks up the matching module in `PRODUCER_MODULE_MAP['order']` and calls `createProducerCliModule('order', OrderMessageDestinationModule)`.
+   * This factory dynamically compiles the NestJS module decorators, connects to PostgreSQL, sets up database schema boundaries (`order_schema`), and loads the `ProducerModule`.
+3. **Command Definition File**: [dispatch-messages.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/cli-commands/dispatch-messages.ts)
+   * The CLI runner instantiates the `@Command({ name: 'dispatch-messages' })` class and calls the `run()` function.
+   * This file acts as a simple wrapper that injects and calls the shared outbox poller service.
+4. **Shared Outbox Relay Service**: [outbox-message-relay.service.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/outbox-message-relay.service.ts)
+   * The `relayPendingMessages()` function triggers.
+   * It queries the `outbox_messages` table for unprocessed events (`processed = false`) using MikroORM's `EntityManager`.
+   * It checks the event type (e.g. `'OrderPlacedEvent'`) against the global singleton [message-destination-registry.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/message-destination-registry.ts) to get the correct destination exchange and routing key.
+5. **RabbitMQ Publisher Service**: [rabbitmq-producer.service.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/rabbitmq/producer/rabbitmq-producer.service.ts)
+   * The relay service calls `ProducerService.publish()`.
+   * This service constructs the standard message envelope header and uses the active `amqplib` channel to push the event to RabbitMQ. It waits for the publisher confirmation callback from the broker.
+6. **DB Update & Finalization**: [outbox-message-relay.service.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/outbox-message-relay.service.ts)
+   * Once RabbitMQ successfully acknowledges receipt, the relay service marks the database row as `processed = true` and updates `processed_at`.
+
+*   **Execution Lifetime**: It can run in two modes:
+    *   *Run-and-Exit*: It processes all pending outbox messages in the database and then terminates immediately. This is ideal for running as a Kubernetes **CronJob** or a systemd timer every 10–30 seconds.
+    *   *Continuous Loop*: Using the `--continuous` flag, it stays alive and continuously polls the database every few seconds.
+
+---
+
+###### 2. The Consumer Worker (`handle-messages`)
+
+The **Consumer** is responsible for listening to RabbitMQ queues and executing the business logic handlers when events arrive. It acts as the "recipient" of our mail.
+
+```
+                           CONSUMER WORKFLOW (handle-messages)
+                           
+   ┌──────────────────────┐      Pushes event       ┌──────────────────────┐
+   │   RabbitMQ Broker    │ ──────────────────────> │   Consumer Service   │
+   │ (e.g. order-queue)   │                         │ (Dynamic CLI Module) │
+   └──────────────────────┘                         └──────────┬───────────┘
+                                                               │
+                                                               │ Routes message
+                                                               ▼
+   ┌──────────────────────┐    Executes Handler     ┌──────────────────────┐
+   │    Domain Handler    │ <────────────────────── │ Inbox Message Handler│
+   │ (e.g. ReserveStock)  │                         │ (Deduplication Log)  │
+   └──────────────────────┘                         └──────────────────────┘
+```
+
+*   **How it runs**:
+    *   It is run via the CLI command:
+        ```bash
+        npx ts-node -r tsconfig-paths/register modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts handle-messages --module order --schema order
+        ```
+
+##### Step-by-Step File Execution Flow (Consumer)
+
+When you run the above consumer daemon, the execution flows sequentially through these files:
+
+```mermaid
+graph TD
+    A["1. Entrypoint:<br>command-handler.ts"] -->|Parses command & module arg| B["2. CLI Factory Mapper:<br>module.map.ts"]
+    B -->|Compiles Dynamic Module & binds Queue signatures| C["3. CLI Command definition:<br>handle-messages.ts"]
+    C -->|Subscribes to queue| D["4. RabbitMQ Consumer Service:<br>consumer.service.ts"]
+    D -->|Receives message from broker| E["5. Inbox Deduplicator:<br>inbox-message-handler.service.ts"]
+    E -->|Verifies idempotency check & initializes DB transaction| F["6. Lazy Module Loader:<br>lazy-load-handler.service.ts"]
+    F -->|Loads domain bundle & gets Handler instance| G["7. Target Business Handler<br>(e.g. place-order.handler.ts)"]
+    G -->|Commits business change & Inbox log| E
+    E -->|Sends ACK callback| D
+```
+
+1. **Entrypoint File**: [command-handler.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts)
+   * Initializes the `nest-commander` application context.
+2. **CLI Module Factory Mapper**: [module.map.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/cli-commands/module.map.ts)
+   * Resolves the `--module order` argument.
+   * Looks up the matching module in `CONSUMER_MODULE_MAP['order']` and calls `createConsumerCliModule('order', OrderSignatureTypes, OrderMessageDestinationModule)`.
+   * Imports [signature.types.service.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/order/src/infrastructure/processors/signature.types.service.ts) to define what events the consumer listens for and maps them to their respective classes.
+3. **Command Definition File**: [handle-messages.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/cli-commands/handle-messages.ts)
+   * Instantiates the `@Command({ name: 'handle-messages' })` class and calls `run()`.
+   * Injects the `ConsumerService` and triggers `start()`.
+4. **RabbitMQ Consumer Service**: [consumer.service.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/rabbitmq/consumer/consumer.service.ts)
+   * Connects to RabbitMQ, binds to the targeted module queue, and creates a subscription channel using `channel.consume()`.
+   * Stays active indefinitely to receive inbound events. When an event is pushed, it reads the header data (`messageId`, `eventType`) and routes it forward.
+5. **Inbox Deduplication Coordinator**: [inbox-message-handler.service.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/inbox-message-handler.service.ts)
+   * Verifies if the `(messageId, handlerName)` has already been processed inside the `inbox_messages` database table.
+   * If unprocessed, it starts a MikroORM database transaction (`BEGIN TRANSACTION`).
+6. **Lazy Module Loader**: [lazy-load-handler.service.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/lazy-load-handler.service.ts)
+   * Dynamically loads the target domain module wrapper (e.g. `OrderModule` or `InventoryModule`) to resolve dependency circles.
+   * Resolves the actual domain handler instance (e.g. [place-order.handler.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/order/src/features/place-order/place-order.handler.ts)) from NestJS's dependency injection pool.
+7. **Execution & Database Commit**:
+   * Executes the feature handler's logic.
+   * If it succeeds, writes the inbox entry into `inbox_messages` and commits both database changes in a single operation.
+8. **Broker Acknowledgment**: [consumer.service.ts](file:///home/shivam/Deswal/event-driven-order-engine/modules/shared/src/infrastructure/message-bus/rabbitmq/consumer/consumer.service.ts)
+   * Once the database transaction is successfully committed, the consumer calls `channel.ack(message)` to remove the message from the RabbitMQ queue.
+
+*   **Execution Lifetime**: It runs as a **Daemon** (a long-lived, continuous background process). It stays active indefinitely, listening for new messages. It only stops if the process receives a termination signal (`SIGTERM` or `SIGINT`), at which point it cleanly closes all RabbitMQ channels and database connections.
+
+---
+
+###### 3. Quick Comparison: Producer vs. Consumer
+
+| Feature | Producer (`dispatch-messages`) | Consumer (`handle-messages`) |
+| :--- | :--- | :--- |
+| **Primary Goal** | Send outbound events from database to RabbitMQ. | Receive inbound events from RabbitMQ and run handlers. |
+| **Trigger Source** | Database polling timer. | RabbitMQ push subscription. |
+| **Underlying CLI Module** | `createProducerCliModule` | `createConsumerCliModule` |
+| **Lifespan** | Ephemeral (runs and exits) OR continuous loop. | Persistent Daemon (keeps running indefinitely). |
+| **Typical Production Setup** | Kubernetes **CronJob** (running periodically). | Kubernetes **Deployment** (running replicas). |
+
+---
 
 ##### The Microservices Migration Path: How Does Option B Scale?
 A common concern is: *If we don't have the config/module files inside the domain module, doesn't that make it harder to split it into a microservice later?*

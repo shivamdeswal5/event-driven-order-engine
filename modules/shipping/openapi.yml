@@ -1,0 +1,323 @@
+openapi: 3.0.3
+info:
+  title: Shipping API
+  version: 1.0.0
+  description: |-
+    REST API for managing shipments and tracking order delivery status within the Event-Driven Order Engine.
+  termsOfService: http://swagger.io/terms/
+  contact:
+    name: API Support
+    email: support@order-fulfillment.example.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+servers:
+  - url: http://localhost:8080/
+    description: Development Server
+  - url: https://api.order-fulfillment.example.com
+    description: Production Server
+tags:
+  - name: Shipping
+    description: Operations related to shipment tracking, creation, dispatch, and delivery
+
+paths:
+  /api/shipments:
+    get:
+      tags:
+        - Shipping
+      summary: Retrieve the list of shipments
+      description: Retrieve a paginated list of all shipments, optionally filtered by status.
+      operationId: listShipments
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter shipments by status.
+          schema:
+            $ref: '#/components/schemas/ShipmentStatus'
+        - name: limit
+          in: query
+          required: false
+          description: Limit the number of shipments returned. Default is 10.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+        - name: offset
+          in: query
+          required: false
+          description: Number of shipments to skip. Default is 0.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            example: 0
+      responses:
+        '200':
+          description: Shipments retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShipmentResponse'
+                  total:
+                    type: integer
+                    example: 5
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/shipments/{orderId}:
+    get:
+      tags:
+        - Shipping
+      summary: Retrieve a shipment by Order ID
+      description: Retrieve detailed shipment information by its associated Order UUID.
+      operationId: getShipment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: The UUID of the order associated with the shipment
+          schema:
+            type: string
+            format: uuid
+            example: 2d9c6d91-d051-4fe1-9ea5-36711f8262a5
+      responses:
+        '200':
+          description: Shipment details retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShipmentResponse'
+        '404':
+          $ref: '#/components/responses/ShipmentNotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/shipments/{orderId}/ship:
+    post:
+      tags:
+        - Shipping
+      summary: Mark shipment as SHIPPED
+      description: Manually transition a pending shipment to SHIPPED by providing carrier and tracking details.
+      operationId: shipShipment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: The UUID of the order associated with the shipment
+          schema:
+            type: string
+            format: uuid
+            example: 2d9c6d91-d051-4fe1-9ea5-36711f8262a5
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShipShipmentRequest'
+      responses:
+        '200':
+          description: Shipment successfully dispatched/marked as SHIPPED.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Shipment marked as SHIPPED successfully.
+        '404':
+          $ref: '#/components/responses/ShipmentNotFound'
+        '409':
+          $ref: '#/components/responses/InvalidStateTransition'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/shipments/{orderId}/deliver:
+    post:
+      tags:
+        - Shipping
+      summary: Mark shipment as DELIVERED
+      description: Manually transition a shipped shipment to DELIVERED, triggering the ShipmentDeliveredEvent.
+      operationId: deliverShipment
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: The UUID of the order associated with the shipment
+          schema:
+            type: string
+            format: uuid
+            example: 2d9c6d91-d051-4fe1-9ea5-36711f8262a5
+      responses:
+        '200':
+          description: Shipment successfully delivered.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Shipment marked as DELIVERED successfully.
+        '404':
+          $ref: '#/components/responses/ShipmentNotFound'
+        '409':
+          $ref: '#/components/responses/InvalidStateTransition'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    ShipmentStatus:
+      type: string
+      enum:
+        - PENDING
+        - SHIPPED
+        - DELIVERED
+        - CANCELLED
+      example: SHIPPED
+
+    ShipShipmentRequest:
+      type: object
+      required:
+        - carrier
+        - trackingNumber
+      properties:
+        carrier:
+          type: string
+          example: FedEx
+        trackingNumber:
+          type: string
+          example: FX-982361-US
+
+    ShipmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: b07d4fa1-c910-48e2-9b2f-6a7e5dc70d27
+        orderId:
+          type: string
+          format: uuid
+          example: 2d9c6d91-d051-4fe1-9ea5-36711f8262a5
+        status:
+          $ref: '#/components/schemas/ShipmentStatus'
+        carrier:
+          type: string
+          nullable: true
+          example: FedEx
+        trackingNumber:
+          type: string
+          nullable: true
+          example: FX-982361-US
+        shippedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-06-30T05:20:10.123Z'
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-06-30T05:15:30.000Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-06-30T05:20:10.123Z'
+
+  responses:
+    BadRequest:
+      description: Bad request / validation error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              statusCode:
+                type: integer
+                example: 400
+              message:
+                type: array
+                items:
+                  type: string
+                example:
+                  - "carrier must be a string"
+                  - "trackingNumber must be a string"
+              error:
+                type: string
+                example: Bad Request
+
+    ShipmentNotFound:
+      description: The specified shipment was not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                example: 'https://api.order-engine.com/errors/shipment-not-found'
+              title:
+                type: string
+                example: Shipment Not Found
+              status:
+                type: integer
+                example: 404
+              detail:
+                type: string
+                example: Shipment for ID/OrderId '2d9c6d91-d051-4fe1-9ea5-36711f8262a5' not found.
+
+    InvalidStateTransition:
+      description: Invalid state transition for shipment
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                example: 'https://api.order-engine.com/errors/invalid-shipment-state'
+              title:
+                type: string
+                example: Invalid Shipment State
+              status:
+                type: integer
+                example: 409
+              detail:
+                type: string
+                example: Cannot perform action 'deliver' on shipment b07d4fa1-c910-48e2-9b2f-6a7e5dc70d27 in state 'PENDING'.
+
+    InternalServerError:
+      description: General internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              type:
+                type: string
+                example: 'about:blank'
+              title:
+                type: string
+                example: Internal Server Error
+              status:
+                type: integer
+                example: 500
+              detail:
+                type: string
+                example: An unexpected error occurred.

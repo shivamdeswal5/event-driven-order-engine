@@ -24,19 +24,24 @@ export class OutboxMessageRepository extends EntityRepository<OutboxMessage> {
   ): Promise<OutboxMessage> {
     const destination = this.messageDestinationRegistry.get(event.eventType);
     if (!destination) {
-      throw new Error(`No destination registered for event type: ${event.eventType}`);
+      throw new Error(
+        `No destination registered for event type: ${event.eventType}`,
+      );
     }
 
-    const outboxMessage = this.create({
-      id: event.eventId || randomUUID(),
-      eventType: event.eventType,
-      payload: event.payload,
-      exchange: destination.exchange,
-      routingKey: destination.routingKey,
-      correlationId: options?.correlationId || event.eventId || randomUUID(),
-      causationId: options?.causationId,
-      processed: false,
-    }, { schema: options?.schema });
+    const outboxMessage = this.create(
+      {
+        id: event.eventId || randomUUID(),
+        eventType: event.eventType,
+        payload: event.payload,
+        exchange: destination.exchange,
+        routingKey: destination.routingKey,
+        correlationId: options?.correlationId || event.eventId || randomUUID(),
+        causationId: options?.causationId,
+        processed: false,
+      },
+      { schema: options?.schema },
+    );
 
     await this.save(outboxMessage);
     return outboxMessage;

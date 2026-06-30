@@ -4,6 +4,7 @@ import { OutboxMessageRelay } from '../outbox-message-relay.service';
 interface BasicCommandOptions {
   limit: number;
   schema: string;
+  continuous?: boolean;
 }
 
 @Command({
@@ -11,20 +12,21 @@ interface BasicCommandOptions {
   description: 'Dispatch messages from outbox based on schema',
 })
 export class DispatchMessages extends CommandRunner {
-  constructor(
-    private readonly outboxMessageRelay: OutboxMessageRelay,
-  ) {
+  constructor(private readonly outboxMessageRelay: OutboxMessageRelay) {
     super();
   }
 
-  async run(passedParams: string[], options: BasicCommandOptions): Promise<void> {
+  async run(
+    passedParams: string[],
+    options: BasicCommandOptions,
+  ): Promise<void> {
     const { schema, limit } = options;
     const schemaMapper: Record<string, string> = {
-      order: process.env.DB_ORDER_SCHEMA || 'public',
-      inventory: process.env.DB_INVENTORY_SCHEMA || 'public',
-      payment: process.env.DB_PAYMENT_SCHEMA || 'public',
-      shipping: process.env.DB_SHIPPING_SCHEMA || 'public',
-      notification: process.env.DB_NOTIFICATION_SCHEMA || 'public',
+      order: process.env.DB_SCHEMA_ORDER || 'order_schema',
+      inventory: process.env.DB_SCHEMA_INVENTORY || 'inventory_schema',
+      payment: process.env.DB_SCHEMA_PAYMENT || 'payment_schema',
+      shipping: process.env.DB_SCHEMA_SHIPPING || 'shipping_schema',
+      notification: process.env.DB_SCHEMA_NOTIFICATION || 'notification_schema',
     };
 
     const targetSchema = schemaMapper[schema];
@@ -35,8 +37,30 @@ export class DispatchMessages extends CommandRunner {
       process.exit(1);
     }
 
-    await this.outboxMessageRelay.dispatchMessages(targetSchema, limit);
-    process.exit(0);
+    if (options.continuous) {
+      console.log(
+        `INFO: Starting Outbox Relay in continuous mode for schema "${targetSchema}"...`,
+      );
+      let running = true;
+
+      const stop = () => {
+        console.log('INFO: Stopping continuous outbox relay...');
+        running = false;
+      };
+
+      process.on('SIGINT', stop);
+      process.on('SIGTERM', stop);
+
+      while (running) {
+        await this.outboxMessageRelay.dispatchMessages(targetSchema, limit);
+        // Sleep for 5 seconds
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      process.exit(0);
+    } else {
+      await this.outboxMessageRelay.dispatchMessages(targetSchema, limit);
+      process.exit(0);
+    }
   }
 
   @Option({
@@ -55,5 +79,14 @@ export class DispatchMessages extends CommandRunner {
   })
   parseSchema(val: string): string {
     return val.trim();
+  }
+
+  @Option({
+    flags: '-c, --continuous',
+    description: 'Run continuously in a loop',
+    defaultValue: false,
+  })
+  parseContinuous(val: string): boolean {
+    return true;
   }
 }

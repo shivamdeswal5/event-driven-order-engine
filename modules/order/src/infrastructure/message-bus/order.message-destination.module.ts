@@ -7,7 +7,9 @@ import { registerOrderMessageDestinations } from './order.message-destination';
   imports: [MessageDestinationModule],
 })
 export class OrderMessageDestinationModule implements OnModuleInit {
-  constructor(private readonly messageDestinationRegistry: MessageDestinationRegistry) {}
+  constructor(
+    private readonly messageDestinationRegistry: MessageDestinationRegistry,
+  ) {}
 
   onModuleInit() {
     registerOrderMessageDestinations(this.messageDestinationRegistry);

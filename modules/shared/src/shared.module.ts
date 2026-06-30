@@ -6,24 +6,26 @@ import { InboxMessageRepository } from './infrastructure/repository/inbox/inbox-
 import { OutboxMessageRepository } from './infrastructure/repository/outbox/outbox-message.repository';
 import { MessageDestinationModule } from './infrastructure/message-bus/message-destination.module';
 import { LazyLoadHandler } from './infrastructure/message-bus/lazy-load-handler.service';
+import { HealthController } from './infrastructure/http/health.controller';
+import { RabbitmqModule } from './infrastructure/message-bus/rabbitmq/config/rabbitmq.module';
+import { createDynamicRabbitMqConfig } from './infrastructure/message-bus/rabbitmq/config/dynamic-rabbitmq.config';
 
 @Global()
 @Module({
   imports: [
     MikroOrmModule.forFeature([InboxMessage, OutboxMessage]),
     MessageDestinationModule,
+    RabbitmqModule.forRoot(createDynamicRabbitMqConfig('shared')),
   ],
-  providers: [
-    InboxMessageRepository,
-    OutboxMessageRepository,
-    LazyLoadHandler,
-  ],
+  controllers: [HealthController],
+  providers: [InboxMessageRepository, OutboxMessageRepository, LazyLoadHandler],
   exports: [
     MikroOrmModule,
     MessageDestinationModule,
     InboxMessageRepository,
     OutboxMessageRepository,
     LazyLoadHandler,
+    RabbitmqModule,
   ],
 })
 export class SharedModule {}

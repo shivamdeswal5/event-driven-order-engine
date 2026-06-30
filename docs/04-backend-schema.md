@@ -175,6 +175,15 @@ Tracks which stock is reserved for which order (for compensation/release).
 - `idx_reservations_product` — `(product_id)` (find reservations per product)
 - `idx_reservations_status` — `(status)` (filter active reservations)
 
+### 4.3 seeds
+
+Tracks the execution of idempotent database seeders within the system.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| name | VARCHAR(255) | PK | Unique name of the seeder (e.g. 'ProductSeeder') |
+| seeded_at | TIMESTAMP | DEFAULT NOW() | Timestamp when the seeding completed |
+
 ---
 
 ## 5. Payment Module Tables
@@ -187,7 +196,7 @@ Tracks which stock is reserved for which order (for compensation/release).
 | order_id | UUID | NOT NULL, UNIQUE | One payment per order |
 | amount | DECIMAL(12,2) | NOT NULL | Payment amount |
 | currency | VARCHAR(3) | NOT NULL, DEFAULT 'USD' | Currency code |
-| status | VARCHAR(50) | NOT NULL, DEFAULT 'PENDING' | Payment status |
+| status | INT | NOT NULL, DEFAULT 0 | Payment status (0: PENDING, 1: PROCESSING, 2: COMPLETED, 3: FAILED, 4: REFUNDED) |
 | failure_reason | VARCHAR(500) | NULL | Why payment failed |
 | processed_at | TIMESTAMP | NULL | When payment was processed |
 | created_at | TIMESTAMP | DEFAULT NOW() | |

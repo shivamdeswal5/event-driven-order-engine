@@ -35,11 +35,11 @@ export default (contextName: string = 'default'): Options => {
     : 'dist/modules/shared/src/infrastructure/database/migrations';
 
   return {
-    driver:   PostgreSqlDriver,
-    host:     process.env.DB_HOST     || 'localhost',
-    port:     Number(process.env.DB_PORT) || 5432,
-    dbName:   process.env.DB_DATABASE || 'order_engine',
-    user:     process.env.DB_USER     || 'order_user',
+    driver: PostgreSqlDriver,
+    host: process.env.DB_HOST || 'localhost',
+    port: Number(process.env.DB_PORT) || 5432,
+    dbName: process.env.DB_NAME || process.env.DB_DATABASE || 'order_engine',
+    user: process.env.DB_USER || 'order_user',
     password: process.env.DB_PASSWORD || 'order_pass',
 
     // Schema: only applied for named (non-default) contexts
@@ -49,7 +49,7 @@ export default (contextName: string = 'default'): Options => {
     }),
 
     // Entity discovery — scoped to context folder or all modules
-    entities:   [
+    entities: [
       `dist/modules/${moduleGlob}/src/domain/**/*.entity.js`,
       `dist/modules/${moduleGlob}/src/infrastructure/database/**/*.entity.js`,
       'dist/modules/shared/src/domain/**/*.entity.js',
@@ -62,16 +62,16 @@ export default (contextName: string = 'default'): Options => {
 
     extensions: [Migrator],
     migrations: {
-      tableName:     'migrations',
-      path:          migrationsPath,
-      glob:          '!(*.d).{js,ts}',
+      tableName: 'migrations',
+      path: migrationsPath,
+      glob: '!(*.d).{js,ts}',
       transactional: true,
-      allOrNothing:  true,
+      allOrNothing: true,
     },
 
-    debug:              process.env.NODE_ENV === 'development',
+    debug: process.env.NODE_ENV === 'development',
     allowGlobalContext: false,
-    forceUtcTimezone:   true,
-    timezone:           'UTC',
+    forceUtcTimezone: true,
+    timezone: 'UTC',
   };
 };

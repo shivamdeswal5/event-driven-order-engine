@@ -1,0 +1,148 @@
+asyncapi: 3.0.0
+info:
+  title: Inventory Module Events
+  version: 1.0.0
+  description: Event definitions published by the Inventory Module of the Event-Driven Order Engine.
+servers:
+  rabbitMQ:
+    host: localhost:5673
+    protocol: amqp
+    description: Development RabbitMQ Broker
+operations:
+  inventory.reserved:
+    action: send
+    channel:
+      $ref: '#/channels/inventory.reserved'
+    messages:
+      - $ref: '#/channels/inventory.reserved/messages/publish.message'
+  inventory.reservation.failed:
+    action: send
+    channel:
+      $ref: '#/channels/inventory.reservation.failed'
+    messages:
+      - $ref: '#/channels/inventory.reservation.failed/messages/publish.message'
+  inventory.released:
+    action: send
+    channel:
+      $ref: '#/channels/inventory.released'
+    messages:
+      - $ref: '#/channels/inventory.released/messages/publish.message'
+channels:
+  inventory.reserved:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: inventory.reserved
+    messages:
+      publish.message:
+        $ref: '#/components/messages/InventoryReservedEvent'
+  inventory.reservation.failed:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: inventory.reservation.failed
+    messages:
+      publish.message:
+        $ref: '#/components/messages/InventoryReservationFailedEvent'
+  inventory.released:
+    servers:
+      - $ref: '#/servers/rabbitMQ'
+    address: inventory.released
+    messages:
+      publish.message:
+        $ref: '#/components/messages/InventoryReleasedEvent'
+components:
+  messages:
+    InventoryReservedEvent:
+      name: InventoryReservedEvent
+      title: Inventory Reserved Event
+      summary: Published after inventory has been successfully reserved for an order.
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/InventoryReservedPayload'
+    InventoryReservationFailedEvent:
+      name: InventoryReservationFailedEvent
+      title: Inventory Reservation Failed Event
+      summary: Published when inventory reservation fails (e.g., due to insufficient stock).
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/InventoryReservationFailedPayload'
+    InventoryReleasedEvent:
+      name: InventoryReleasedEvent
+      title: Inventory Released Event
+      summary: Published when reserved inventory has been successfully released/returned back to stock.
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/InventoryReleasedPayload'
+  schemas:
+    InventoryReservedPayload:
+      type: object
+      required:
+        - orderId
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+    InventoryReservationFailedPayload:
+      type: object
+      required:
+        - orderId
+        - reason
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        reason:
+          type: string
+          example: Insufficient stock for product 3b2f6b8d-8e5c-4023-913f-6f81d4ca92b0. Requested: 5, Available: 2.
+    InventoryReleasedPayload:
+      type: object
+      required:
+        - orderId
+        - items
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          example: a2f6b8d7-8e5c-4023-913f-6f81d4ca92b0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryReleasedItem'
+    InventoryReleasedItem:
+      type: object
+      required:
+        - productId
+        - quantity
+      properties:
+        productId:
+          type: string
+          format: uuid
+          example: 3b2f6b8d-8e5c-4023-913f-6f81d4ca92b0
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+  messageTraits:
+    commonHeaders:
+      headers:
+        type: object
+        properties:
+          message_id:
+            type: string
+            format: uuid
+            example: 8c76601b-9921-4167-821c-eb7eefd4d041
+          type:
+            type: string
+            description: Message type (event name)
+            example: InventoryReservedEvent
+          app_id:
+            type: string
+            example: event-driven-order-engine
+          timestamp:
+            type: string
+            format: date-time
+            example: '2026-06-29T12:00:00.000Z'

@@ -1,7 +1,13 @@
 import { ErrorMapper } from 'http-problem-details-mapper';
-import { ProblemDocument, ProblemDocumentExtension } from 'http-problem-details';
+import {
+  ProblemDocument,
+  ProblemDocumentExtension,
+} from 'http-problem-details';
 import { HttpStatus } from '@nestjs/common';
-import { InvalidOrderStateException, OrderNotFoundException } from '../../../domain/order/exceptions/order.exceptions';
+import {
+  InvalidOrderStateException,
+  OrderNotFoundException,
+} from '../../../domain/order/exceptions/order.exceptions';
 
 export class OrderNotFoundExceptionMapper extends ErrorMapper {
   constructor() {
@@ -38,7 +44,7 @@ export class InvalidOrderStateExceptionMapper extends ErrorMapper {
         status: HttpStatus.CONFLICT,
         detail: exception.message,
       },
-      extension
+      extension,
     );
   }
 }

@@ -18,6 +18,7 @@ export class RabbitmqConnectionService implements OnModuleDestroy {
   private isMaxReconnectPolicyApplied = false;
   private reconnectTries = 0;
   private timeout: NodeJS.Timeout | null = null;
+  private isShuttingDown = false;
 
   constructor(private readonly rabbitMQConfigService: RabbitmqConfigService) {
     const { maxReconnectTries, reconnectPolicy } =
@@ -53,6 +54,7 @@ export class RabbitmqConnectionService implements OnModuleDestroy {
   }
 
   async onModuleDestroy() {
+    this.isShuttingDown = true;
     if (this.timeout) clearTimeout(this.timeout);
     await this.closeChannel();
     if (this.connection) {
@@ -162,8 +164,7 @@ export class RabbitmqConnectionService implements OnModuleDestroy {
         endpoint: {
           name: this.config.appName,
           delivery_metadata: {
-            message_type:
-              properties.type || headers.type,
+            message_type: properties.type || headers.type,
             exchange: message.fields.exchange,
             routing_key: message.fields.routingKey,
           },
@@ -202,19 +203,19 @@ export class RabbitmqConnectionService implements OnModuleDestroy {
     );
     properties.headers['redelivery_count'] = redeliveryCount + 1;
     properties.headers['retry_endpoint'] = this.config.appName;
-    properties.expiration = String(
-      (redeliveryCount + 1) * 2000,
-    );
+    properties.expiration = String((redeliveryCount + 1) * 2000);
     return properties;
   }
 
   private async handleClose() {
+    if (this.isShuttingDown) return;
     console.log('Disconnected from RabbitMQ');
     if (this.timeout) clearTimeout(this.timeout);
     await this.reconnect();
   }
 
   private async handleError(error: Error) {
+    if (this.isShuttingDown) return;
     console.log('Error in RabbitMQ connection', error);
     if (this.timeout) clearTimeout(this.timeout);
     await this.reconnect();

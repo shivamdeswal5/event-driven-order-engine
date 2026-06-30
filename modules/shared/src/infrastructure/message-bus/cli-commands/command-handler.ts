@@ -1,5 +1,9 @@
 import { CommandFactory } from 'nest-commander';
-import { CONSUMER_MODULE_MAP, PRODUCER_MODULE_MAP } from './module.map';
+import {
+  CONSUMER_MODULE_MAP,
+  PRODUCER_MODULE_MAP,
+  createSeederCliModule,
+} from './module.map';
 
 async function bootstrap() {
   const command = process.argv[2];
@@ -54,6 +58,10 @@ async function bootstrap() {
       'warn',
       'error',
     ]);
+  }
+
+  if (command === 'seed-db') {
+    await CommandFactory.run(createSeederCliModule(), ['warn', 'error', 'log']);
   }
 }
 

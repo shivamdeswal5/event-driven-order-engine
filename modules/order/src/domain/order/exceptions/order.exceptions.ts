@@ -7,7 +7,13 @@ export class OrderNotFoundException extends DomainException {
 }
 
 export class InvalidOrderStateException extends DomainException {
-  constructor(public readonly orderId: string, public readonly currentState: string, public readonly action: string) {
-    super(`Cannot perform action '${action}' on order ${orderId} in state '${currentState}'.`);
+  constructor(
+    public readonly orderId: string,
+    public readonly currentState: string,
+    public readonly action: string,
+  ) {
+    super(
+      `Cannot perform action '${action}' on order ${orderId} in state '${currentState}'.`,
+    );
   }
 }

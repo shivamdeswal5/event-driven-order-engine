@@ -2,7 +2,10 @@ import { Entity, Property } from '@mikro-orm/core';
 import { BaseEntity } from '@shared/domain/base.entity';
 import { OutboxMessageRepository } from '@shared/infrastructure/repository/outbox/outbox-message.repository';
 
-@Entity({ tableName: 'outbox_messages', repository: () => OutboxMessageRepository })
+@Entity({
+  tableName: 'outbox_messages',
+  repository: () => OutboxMessageRepository,
+})
 export class OutboxMessage extends BaseEntity {
   @Property()
   eventType!: string;
