@@ -3,7 +3,7 @@ import { UpdateStockDto } from './update-stock.dto';
 import { UpdateStockCommand } from './update-stock.command';
 import { UpdateStockHandler } from './update-stock.handler';
 
-@Controller('products')
+@Controller('api/products')
 export class UpdateStockController {
   constructor(private readonly updateStockHandler: UpdateStockHandler) {}
 

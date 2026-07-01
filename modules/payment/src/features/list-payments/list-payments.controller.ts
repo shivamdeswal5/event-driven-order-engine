@@ -3,7 +3,7 @@ import { ListPaymentsDto } from './list-payments.dto';
 import { ListPaymentsQuery } from './list-payments.query';
 import { ListPaymentsHandler } from './list-payments.handler';
 
-@Controller('payments')
+@Controller('api/payments')
 export class ListPaymentsController {
   constructor(private readonly listPaymentsHandler: ListPaymentsHandler) {}
 

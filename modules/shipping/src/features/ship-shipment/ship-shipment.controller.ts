@@ -10,7 +10,7 @@ import { ShipShipmentDto } from './ship-shipment.dto';
 import { ShipShipmentCommand } from './ship-shipment.command';
 import { ShipShipmentHandler } from './ship-shipment.handler';
 
-@Controller('shipments')
+@Controller('api/shipments')
 export class ShipShipmentController {
   constructor(private readonly shipShipmentHandler: ShipShipmentHandler) {}
 

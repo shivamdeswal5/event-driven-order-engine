@@ -25,15 +25,20 @@ describe('Resilience and Outbox Concurrency (e2e)', () => {
 
     beforeEach(async () => {
       // Force DB_HOST to localhost if running in local test run
-      if (!process.env.DB_HOST || process.env.DB_HOST === 'postgres') {
+      if (
+        !process.env.DB_HOST ||
+        process.env.DB_HOST === 'postgres' ||
+        process.env.DB_HOST === 'order-engine-database'
+      ) {
         process.env.DB_HOST = 'localhost';
       }
       if (
         !process.env.RABBITMQ_URL ||
         process.env.RABBITMQ_URL.includes('@rabbitmq:')
       ) {
-        process.env.RABBITMQ_URL =
-          'amqp://rabbit_user:rabbit_pass@localhost:5672';
+        const user = process.env.RABBITMQ_USER || 'deswal';
+        const pass = process.env.RABBITMQ_PASSWORD || 'deswal';
+        process.env.RABBITMQ_URL = `amqp://${user}:${pass}@localhost:5672`;
       }
 
       const moduleFixture1: TestingModule = await Test.createTestingModule({
@@ -138,15 +143,20 @@ describe('Resilience and Outbox Concurrency (e2e)', () => {
 
     beforeEach(async () => {
       // Force DB_HOST and RABBITMQ_URL to localhost
-      if (!process.env.DB_HOST || process.env.DB_HOST === 'postgres') {
+      if (
+        !process.env.DB_HOST ||
+        process.env.DB_HOST === 'postgres' ||
+        process.env.DB_HOST === 'order-engine-database'
+      ) {
         process.env.DB_HOST = 'localhost';
       }
       if (
         !process.env.RABBITMQ_URL ||
         process.env.RABBITMQ_URL.includes('@rabbitmq:')
       ) {
-        process.env.RABBITMQ_URL =
-          'amqp://rabbit_user:rabbit_pass@localhost:5672';
+        const user = process.env.RABBITMQ_USER || 'deswal';
+        const pass = process.env.RABBITMQ_PASSWORD || 'deswal';
+        process.env.RABBITMQ_URL = `amqp://${user}:${pass}@localhost:5672`;
       }
 
       const moduleFixture: TestingModule = await Test.createTestingModule({

@@ -3,7 +3,7 @@ import { ListOrdersDto } from './list-orders.dto';
 import { ListOrdersQuery } from './list-orders.query';
 import { ListOrdersHandler } from './list-orders.handler';
 
-@Controller('orders')
+@Controller('api/orders')
 export class ListOrdersController {
   constructor(private readonly listOrdersHandler: ListOrdersHandler) {}
 

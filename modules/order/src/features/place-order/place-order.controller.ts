@@ -6,7 +6,7 @@ import {
 } from './place-order.command';
 import { PlaceOrderHandler } from './place-order.handler';
 
-@Controller('orders')
+@Controller('api/orders')
 export class PlaceOrderController {
   constructor(private readonly placeOrderHandler: PlaceOrderHandler) {}
 

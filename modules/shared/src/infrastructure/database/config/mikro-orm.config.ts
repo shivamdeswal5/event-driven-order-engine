@@ -1,5 +1,6 @@
 import { Options, PostgreSqlDriver } from '@mikro-orm/postgresql';
 import { Migrator } from '@mikro-orm/migrations';
+import { SeedManager } from '@mikro-orm/seeder';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -48,19 +49,24 @@ export default (contextName: string = 'default'): Options => {
       schema: `${contextName.replace(/-/g, '_')}_schema`,
     }),
 
+    // Detect if running from compiled JS code or TS source code
+    tsNode: !(__filename.includes('/dist/') || __dirname.includes('/dist/')),
+
     // Entity discovery — scoped to context folder or all modules
     entities: [
       `dist/modules/${moduleGlob}/src/domain/**/*.entity.js`,
       `dist/modules/${moduleGlob}/src/infrastructure/database/**/*.entity.js`,
       'dist/modules/shared/src/domain/**/*.entity.js',
     ],
-    entitiesTs: [
-      `modules/${moduleGlob}/src/domain/**/*.entity.ts`,
-      `modules/${moduleGlob}/src/infrastructure/database/**/*.entity.ts`,
-      'modules/shared/src/domain/**/*.entity.ts',
-    ],
+    ...(!(__filename.includes('/dist/') || __dirname.includes('/dist/')) && {
+      entitiesTs: [
+        `modules/${moduleGlob}/src/domain/**/*.entity.ts`,
+        `modules/${moduleGlob}/src/infrastructure/database/**/*.entity.ts`,
+        'modules/shared/src/domain/**/*.entity.ts',
+      ],
+    }),
 
-    extensions: [Migrator],
+    extensions: [Migrator, SeedManager],
     migrations: {
       tableName: 'migrations',
       path: migrationsPath,
@@ -68,9 +74,13 @@ export default (contextName: string = 'default'): Options => {
       transactional: true,
       allOrNothing: true,
     },
+    seeder: {
+      path: `dist/modules/${moduleGlob}/src/infrastructure/database/seeders`,
+      defaultSeeder: 'DatabaseSeeder',
+      glob: '!(*.d).{js,ts}',
+    },
 
     debug: process.env.NODE_ENV === 'development',
-    allowGlobalContext: false,
     forceUtcTimezone: true,
     timezone: 'UTC',
   };

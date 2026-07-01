@@ -2,7 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ListProductsQuery } from './list-products.query';
 import { ListProductsHandler } from './list-products.handler';
 
-@Controller('products')
+@Controller('api/products')
 export class ListProductsController {
   constructor(private readonly listProductsHandler: ListProductsHandler) {}
 

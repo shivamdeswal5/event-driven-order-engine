@@ -845,8 +845,7 @@ The **Consumer** is responsible for listening to RabbitMQ queues and executing t
 
 *   **How it runs**:
     *   It is run via the CLI command:
-        ```bash
-        npx ts-node -r tsconfig-paths/register modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts handle-messages --module order --schema order
+        npm run handle-messages -- --module=order
         ```
 
 ##### Step-by-Step File Execution Flow (Consumer)
@@ -990,16 +989,16 @@ This is a huge advantage for frontend teams and API consumers — they write one
 Runs the background outbox message dispatcher for a specific module, pulling messages from the database schema and publishing them to RabbitMQ.
 ```bash
 # Run once (CronJob style)
-npx ts-node modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts dispatch-messages --module order --schema public --limit 100
+npm run dispatch-messages -- --module=order --limit=100
 
 # Run continuously (Continuous Worker Daemon style)
-npx ts-node modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts dispatch-messages --module order --schema public --continuous
+npm run dispatch-messages -- --module=order --continuous
 ```
 
 ### 4.2 Run Message Consumer (Daemon Worker)
 Runs the daemon worker that listens on RabbitMQ queues and handles events dynamically.
 ```bash
-npx ts-node modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts handle-messages --module order --schema public
+npm run handle-messages -- --module=order
 ```
 
 ---
@@ -1084,7 +1083,7 @@ flowchart TD
 1. **CLI Execution**: 
    The process is started using the `nest-commander` CLI entry point. For example, running the consumer worker daemon:
    ```bash
-   npx ts-node modules/shared/src/infrastructure/message-bus/cli-commands/command-handler.ts handle-messages --module order --schema public
+   npm run handle-messages -- --module=order
    ```
 2. **Container Bootstrap**: 
    `CommandFactory` boots the NestJS application context in a lightweight Command mode (no HTTP listener/server is started).

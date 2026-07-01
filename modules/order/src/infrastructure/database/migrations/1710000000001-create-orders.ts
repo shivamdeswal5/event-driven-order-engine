@@ -16,7 +16,7 @@ export class CreateOrders1710000000001 extends Migration {
         "id"              UUID          PRIMARY KEY,
         "customer_id"     UUID          NOT NULL,
         "total_price"     DECIMAL(10,2) NOT NULL,
-        "status"          VARCHAR(255)  NOT NULL DEFAULT 'PENDING',
+        "status"          INTEGER       NOT NULL DEFAULT 0,
         "cancel_reason"   VARCHAR(255),
         "created_at"      TIMESTAMP     NOT NULL DEFAULT now(),
         "updated_at"      TIMESTAMP     NOT NULL DEFAULT now()

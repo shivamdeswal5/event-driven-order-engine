@@ -3,7 +3,7 @@ import { ListShipmentsDto } from './list-shipments.dto';
 import { ListShipmentsQuery } from './list-shipments.query';
 import { ListShipmentsHandler } from './list-shipments.handler';
 
-@Controller('shipments')
+@Controller('api/shipments')
 export class ListShipmentsController {
   constructor(private readonly listShipmentsHandler: ListShipmentsHandler) {}
 

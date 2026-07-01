@@ -3,7 +3,7 @@ import { AddProductDto } from './add-product.dto';
 import { AddProductCommand } from './add-product.command';
 import { AddProductHandler } from './add-product.handler';
 
-@Controller('products')
+@Controller('api/products')
 export class AddProductController {
   constructor(private readonly addProductHandler: AddProductHandler) {}
 

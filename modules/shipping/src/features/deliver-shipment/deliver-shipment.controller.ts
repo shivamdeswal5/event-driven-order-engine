@@ -2,7 +2,7 @@ import { Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { DeliverShipmentCommand } from './deliver-shipment.command';
 import { DeliverShipmentHandler } from './deliver-shipment.handler';
 
-@Controller('shipments')
+@Controller('api/shipments')
 export class DeliverShipmentController {
   constructor(
     private readonly deliverShipmentHandler: DeliverShipmentHandler,

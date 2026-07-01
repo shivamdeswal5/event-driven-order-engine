@@ -9,7 +9,14 @@ export class ListNotificationsHandler {
 
   async handle(
     query: ListNotificationsQuery,
-  ): Promise<{ items: Notification[]; total: number }> {
+  ): Promise<{
+    items: Notification[];
+    total: number;
+    limit: number;
+    offset: number;
+    page: number;
+    totalPages: number;
+  }> {
     const where: any = {};
     if (query.orderId) {
       where.orderId = query.orderId;
@@ -21,6 +28,16 @@ export class ListNotificationsHandler {
       orderBy: { createdAt: 'ASC' }, // ascending so timeline reads top-to-bottom
     });
 
-    return { items, total };
+    const page = Math.floor(query.offset / query.limit) + 1;
+    const totalPages = Math.ceil(total / query.limit);
+
+    return {
+      items,
+      total,
+      limit: query.limit,
+      offset: query.offset,
+      page,
+      totalPages,
+    };
   }
 }

@@ -2,7 +2,6 @@ import { CommandFactory } from 'nest-commander';
 import {
   CONSUMER_MODULE_MAP,
   PRODUCER_MODULE_MAP,
-  createSeederCliModule,
 } from './module.map';
 
 async function bootstrap() {
@@ -29,6 +28,19 @@ async function bootstrap() {
   };
 
   const module = getModuleAndStripArgv();
+
+  if (module) {
+    const hasSchema = process.argv.some(
+      (arg) =>
+        arg === '--schema' ||
+        arg === '-s' ||
+        arg.startsWith('--schema=') ||
+        arg.startsWith('-s='),
+    );
+    if (!hasSchema) {
+      process.argv.push('--schema', module);
+    }
+  }
 
   if (command === 'dispatch-messages') {
     if (!module || !PRODUCER_MODULE_MAP[module]) {
@@ -60,9 +72,7 @@ async function bootstrap() {
     ]);
   }
 
-  if (command === 'seed-db') {
-    await CommandFactory.run(createSeederCliModule(), ['warn', 'error', 'log']);
-  }
+
 }
 
 bootstrap();

@@ -125,22 +125,4 @@ export const PRODUCER_MODULE_MAP: Record<string, any> = {
   ),
 };
 
-import { SeedDbCommand } from './seed-db';
 
-export function createSeederCliModule(): any {
-  @Module({
-    imports: [
-      ConfigModule.forRoot({
-        isGlobal: true,
-        envFilePath: '.env',
-        load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
-      }),
-      MikroOrmModule.forRoot(mikroOrmConfig),
-      SharedModule,
-    ],
-    providers: [SeedDbCommand],
-  })
-  class DynamicSeederCliModule {}
-
-  return DynamicSeederCliModule;
-}

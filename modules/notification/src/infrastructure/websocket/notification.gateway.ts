@@ -54,6 +54,12 @@ export class NotificationGateway
   broadcastToOrder(orderId: string, eventType: string, message: string) {
     const room = `order:${orderId}`;
     this.logger.log(`Broadcasting event ${eventType} to room: ${room}`);
+    if (!this.server) {
+      this.logger.warn(
+        `WebSocket server is not initialized (CLI/standalone mode). Skipping real-time broadcast.`,
+      );
+      return;
+    }
     this.server.to(room).emit('notification', {
       orderId,
       eventType,

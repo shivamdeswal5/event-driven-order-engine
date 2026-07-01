@@ -2,7 +2,7 @@ import { Controller, Get, Param } from '@nestjs/common';
 import { GetPaymentQuery } from './get-payment.query';
 import { GetPaymentHandler } from './get-payment.handler';
 
-@Controller('payments')
+@Controller('api/payments')
 export class GetPaymentController {
   constructor(private readonly getPaymentHandler: GetPaymentHandler) {}
 

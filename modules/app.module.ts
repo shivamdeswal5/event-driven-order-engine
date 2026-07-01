@@ -17,6 +17,9 @@ import {
 
 import mikroOrmConfig from '../mikro-orm.config';
 
+import { AppController } from './app.controller';
+import { AppHandler } from './app.handler';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -32,7 +35,7 @@ import mikroOrmConfig from '../mikro-orm.config';
     ShippingModule,
     NotificationModule,
   ],
-  controllers: [],
-  providers: [],
+  controllers: [AppController],
+  providers: [AppHandler],
 })
 export class AppModule {}

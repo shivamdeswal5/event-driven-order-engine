@@ -3,7 +3,7 @@ import { CancelOrderDto } from './cancel-order.dto';
 import { CancelOrderCommand } from './cancel-order.command';
 import { CancelOrderHandler } from './cancel-order.handler';
 
-@Controller('orders')
+@Controller('api/orders')
 export class CancelOrderController {
   constructor(private readonly cancelOrderHandler: CancelOrderHandler) {}
 

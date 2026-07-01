@@ -36,12 +36,23 @@ export class OutboxMessageRelay {
         await this.producerService.startPublishing();
         publishStarted = true;
 
-        for (const message of messages) {
-          await this.producerService.publishSingleMessage(message);
-          message.processed = true;
-          message.processedAt = new Date();
-          publishedCount++;
-        }
+        // Publish concurrently to RabbitMQ
+        await Promise.all(
+          messages.map((message) =>
+            this.producerService.publishSingleMessage(message),
+          ),
+        );
+
+        // Bulk-update database records in a single query
+        const ids = messages.map((m) => m.id);
+        const now = new Date();
+        const qb = transactionalEm.createQueryBuilder(OutboxMessage);
+        qb.update({ processed: true, processedAt: now })
+          .where({ id: { $in: ids } })
+          .withSchema(schema);
+        await qb.execute();
+
+        publishedCount = messages.length;
 
         await this.producerService.finishPublishing();
         publishStarted = false;

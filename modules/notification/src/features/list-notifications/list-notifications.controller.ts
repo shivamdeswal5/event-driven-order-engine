@@ -3,7 +3,7 @@ import { ListNotificationsDto } from './list-notifications.dto';
 import { ListNotificationsQuery } from './list-notifications.query';
 import { ListNotificationsHandler } from './list-notifications.handler';
 
-@Controller('notifications')
+@Controller('api/notifications')
 export class ListNotificationsController {
   constructor(
     private readonly listNotificationsHandler: ListNotificationsHandler,
