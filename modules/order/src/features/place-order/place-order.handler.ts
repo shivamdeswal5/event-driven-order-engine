@@ -14,7 +14,7 @@ export class PlaceOrderHandler {
   ) {}
 
   @Transactional()
-  async handle(command: PlaceOrderCommand): Promise<void> {
+  async handle(command: PlaceOrderCommand): Promise<string> {
     // 1. Calculate total price
     const totalPrice = command.items.reduce(
       (sum, item) => sum + item.quantity * item.price,
@@ -46,5 +46,7 @@ export class PlaceOrderHandler {
     await this.outboxRepository.storeOutboxMessage(orderPlacedEvent, {
       schema: process.env.DB_SCHEMA_ORDER,
     });
+
+    return order.id;
   }
 }

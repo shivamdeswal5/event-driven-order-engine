@@ -18,9 +18,10 @@ export class PlaceOrderController {
     );
     const command = new PlaceOrderCommand(dto.customerId, commandItems);
 
-    await this.placeOrderHandler.handle(command);
+    const orderId = await this.placeOrderHandler.handle(command);
     return {
       message: 'Order placed successfully.',
+      id: orderId,
     };
   }
 }
