@@ -193,7 +193,7 @@ modules/shared/
 | 6. Shipping Module | ✅ Done | Core flow, database schema, HTTP APIs, events, and E2E lifecycle/compensation testing |
 | 7. Notification Module | ✅ Done | Scaffolding, database schema, WebSocket gateway subscription, and timeline timeline REST endpoint |
 | 8. Saga & Compensation | ✅ Done | Rollback and progression processors, dynamic RabbitMQ bindings, and full E2E validation |
-| 9. Retry & DLQ | ⬜ Not Started | Resilience, DLQ setup, retry policies |
+| 9. Retry & DLQ | ✅ Done | Resilience, DLQ setup, retry policies |
 | 10. Docs & Polish | ✅ Done | API OpenAPI and AsyncAPI specs, comprehensive docs setup |
 
 ---
@@ -254,11 +254,11 @@ docker compose logs -f backend                # View logs
 
 ## 11. Current Status
 
-- **Current Phase**: Phase 9 — Retry & DLQ (Pending)
+- **Current Status**: All phases (1–10) are successfully completed.
 - **Last Completed**:
-  - Phase 7 (Notification Module) — complete. Scaffolding, database schema migration, WebSocket room subscription, event timeline, and event consumers.
-  - Phase 8 (Saga & Compensation Choreography) — complete. Scaffolding rollback/progression processors, signature types routing, and full E2E validation.
-- **Next Step**: Start Phase 9 (Retry & DLQ).
+  - Phase 9 (Retry & DLQ) — complete. Fully integrated retry exchanges and dead-letter queues with exponential backoff and structured poison message handling.
+  - Phase 10 (Docs & Polish) — complete. All documentation updated, aligned, and build tested.
+- **Next Step**: Proceed with E2E manual/automated runs and deployment testing.
 
 ---
 
