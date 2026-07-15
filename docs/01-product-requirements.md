@@ -2,7 +2,7 @@
 
 ## Resilient Event-Driven Order Fulfillment Engine
 
-**Version**: 1.0 | **Last Updated**: 2026-06-25
+**Version**: 1.1 | **Last Updated**: 2026-07-15 (ShipmentShippedEvent saga correction)
 
 ---
 
@@ -47,17 +47,16 @@ Traditional monolithic order systems suffer from:
 | Get Order | `GET /api/orders/:id` |
 | List Orders | `GET /api/orders` |
 | Cancel Order | `POST /api/orders/:id/cancel` |
-| Get Order Status | `GET /api/orders/:id/status` |
 
-**Publishes**: `OrderPlaced`, `OrderCancelled` (fanout)
-**Consumes**: `PaymentCompleted`, `PaymentFailed`, `ShipmentCreated`, `ShipmentDelivered`
+**Publishes**: `OrderPlacedEvent`, `OrderCancelledEvent`
+**Consumes**: `InventoryReservationFailedEvent`, `PaymentCompletedEvent`, `PaymentFailedEvent`, `ShipmentShippedEvent`, `ShipmentDeliveredEvent`
 
-**Order Status State Machine:**
+**Order Status State Machine** (as implemented — coarse-grained; intermediate saga steps live in the other modules, not on the order status):
 ```
-PLACED → INVENTORY_RESERVED → PAYMENT_PROCESSING → PAID → SHIPPING → DELIVERED
-  │              │                    │
-  ▼              ▼                    ▼
-CANCELLED   CANCELLED           PAYMENT_FAILED → CANCELLING → CANCELLED
+PENDING → PLACED → PAID → SHIPPED → DELIVERED
+   │         │       │
+   ▼         ▼       ▼
+        CANCELLED  (allowed from PENDING/PLACED/PAID; blocked once SHIPPED/DELIVERED)
 ```
 
 ### 4.2 Inventory Module
@@ -94,7 +93,7 @@ Simulated: 80% success, 20% failure (configurable).
 | List Shipments | `GET /api/shipments` |
 | Update Status | `PATCH /api/shipments/:id/status` |
 
-**Publishes**: `ShipmentCreated`, `ShipmentDelivered`
+**Publishes**: `ShipmentCreated`, `ShipmentShipped`, `ShipmentDelivered`
 **Consumes**: `PaymentCompleted`, `OrderCancelled`
 
 ### 4.5 Notification Module
@@ -106,7 +105,7 @@ Simulated: 80% success, 20% failure (configurable).
 
 > Event-driven only. Notifications logged to DB (no real email/SMS in V1).
 
-**Consumes**: `OrderPlaced`, `PaymentCompleted`, `PaymentFailed`, `ShipmentCreated`, `ShipmentDelivered`, `OrderCancelled`
+**Consumes**: `OrderPlaced`, `PaymentCompleted`, `PaymentFailed`, `ShipmentCreated`, `ShipmentShipped`, `ShipmentDelivered`, `OrderCancelled`
 
 ---
 
@@ -175,8 +174,9 @@ Simulated: 80% success, 20% failure (configurable).
 - Real notifications (SendGrid, Twilio)
 - Authentication / Authorization
 - Multi-tenancy, Rate limiting, Caching
-- WebSocket real-time updates
 - CI/CD, Kubernetes, Load testing
+
+> **Update:** WebSocket real-time updates were originally out of scope but are now **implemented** — the Notification module exposes a Socket.io gateway on the `/notifications` namespace that broadcasts lifecycle events to subscribed clients (see [websocket-setup.md](websocket-setup.md)).
 
 ---
 

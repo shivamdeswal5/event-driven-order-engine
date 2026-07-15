@@ -19,6 +19,7 @@ import {
   appConfig,
   databaseConfig,
   rabbitmqConfig,
+  redisConfig,
   outboxConfig,
 } from '@shared/infrastructure/config/app.config';
 import mikroOrmConfig from '../../../../../../mikro-orm.config';
@@ -34,7 +35,7 @@ function createProducerCliModule(
       ConfigModule.forRoot({
         isGlobal: true,
         envFilePath: '.env',
-        load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
+        load: [appConfig, databaseConfig, rabbitmqConfig, redisConfig, outboxConfig],
       }),
       MikroOrmModule.forRoot(mikroOrmConfig),
       SharedModule,
@@ -63,7 +64,7 @@ function createConsumerCliModule(
       ConfigModule.forRoot({
         isGlobal: true,
         envFilePath: '.env',
-        load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
+        load: [appConfig, databaseConfig, rabbitmqConfig, redisConfig, outboxConfig],
       }),
       MikroOrmModule.forRoot(mikroOrmConfig),
       SharedModule,

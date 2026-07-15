@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { InboxMessageRepository } from '@shared/infrastructure/repository/inbox/inbox-message.repository';
-import { NotificationGateway } from '../../websocket/notification.gateway';
+import { NotificationBroadcaster } from '../../realtime/notification-broadcaster.service';
 import { BaseNotificationProcessor } from '../base-notification.processor';
 
 @Injectable()
@@ -9,9 +9,9 @@ export class PaymentFailedProcessor extends BaseNotificationProcessor {
   constructor(
     em: EntityManager,
     inboxRepository: InboxMessageRepository,
-    gateway: NotificationGateway,
+    broadcaster: NotificationBroadcaster,
   ) {
-    super(em, inboxRepository, gateway);
+    super(em, inboxRepository, broadcaster);
   }
 
   getEventType(): string {

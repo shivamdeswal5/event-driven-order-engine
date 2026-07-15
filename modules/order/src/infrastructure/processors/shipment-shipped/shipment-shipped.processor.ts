@@ -2,10 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { EntityManager, Transactional } from '@mikro-orm/core';
 import { InboxMessageRepository } from '@shared/infrastructure/repository/inbox/inbox-message.repository';
 import { OrderRepository } from '../../repository/order.repository';
+import { OrderStatus } from '../../../domain/order/enum/order-status.enum';
 
 @Injectable()
-export class ShipmentCreatedProcessor {
-  private readonly logger = new Logger(ShipmentCreatedProcessor.name);
+export class ShipmentShippedProcessor {
+  private readonly logger = new Logger(ShipmentShippedProcessor.name);
 
   constructor(
     private readonly em: EntityManager,
@@ -14,7 +15,7 @@ export class ShipmentCreatedProcessor {
   ) {}
 
   getHandlerName(): string {
-    return ShipmentCreatedProcessor.name;
+    return ShipmentShippedProcessor.name;
   }
 
   @Transactional()
@@ -23,14 +24,14 @@ export class ShipmentCreatedProcessor {
     const orderId = payload.orderId;
     const schema = process.env.DB_SCHEMA_ORDER!;
 
-    this.logger.log(`Processing ShipmentCreatedEvent for order: ${orderId}`);
+    this.logger.log(`Processing ShipmentShippedEvent for order: ${orderId}`);
 
     // Deduplicate/Idempotency check
     await this.inboxRepository.storeInboxMessage(
       {
         messageId: message.messageId,
         handlerName: this.getHandlerName(),
-        eventType: 'ShipmentCreatedEvent',
+        eventType: 'ShipmentShippedEvent',
       },
       schema,
     );
@@ -38,6 +39,12 @@ export class ShipmentCreatedProcessor {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
       this.logger.error(`Order not found for ID: ${orderId}`);
+      return;
+    }
+
+    // Idempotent guard: event redelivery or legacy state should not error the consumer
+    if (order.status === OrderStatus.SHIPPED) {
+      this.logger.log(`Order ${orderId} already SHIPPED. Skipping.`);
       return;
     }
 

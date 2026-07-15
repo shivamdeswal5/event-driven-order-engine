@@ -7,8 +7,8 @@ import { PaymentFailedProcessorModule } from './payment-failed/payment-failed.mo
 import { PaymentFailedProcessor } from './payment-failed/payment-failed.processor';
 import { PaymentCompletedProcessorModule } from './payment-completed/payment-completed.module';
 import { PaymentCompletedProcessor } from './payment-completed/payment-completed.processor';
-import { ShipmentCreatedProcessorModule } from './shipment-created/shipment-created.module';
-import { ShipmentCreatedProcessor } from './shipment-created/shipment-created.processor';
+import { ShipmentShippedProcessorModule } from './shipment-shipped/shipment-shipped.module';
+import { ShipmentShippedProcessor } from './shipment-shipped/shipment-shipped.processor';
 import { ShipmentDeliveredProcessorModule } from './shipment-delivered/shipment-delivered.module';
 import { ShipmentDeliveredProcessor } from './shipment-delivered/shipment-delivered.processor';
 
@@ -35,10 +35,10 @@ export class OrderSignatureTypes extends SignatureTypes {
           PaymentCompletedProcessor,
         ),
       ],
-      ShipmentCreatedEvent: [
+      ShipmentShippedEvent: [
         this.lazyLoader.handle(
-          ShipmentCreatedProcessorModule,
-          ShipmentCreatedProcessor,
+          ShipmentShippedProcessorModule,
+          ShipmentShippedProcessor,
         ),
       ],
       ShipmentDeliveredEvent: [

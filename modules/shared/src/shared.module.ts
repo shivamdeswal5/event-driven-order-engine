@@ -9,6 +9,7 @@ import { LazyLoadHandler } from './infrastructure/message-bus/lazy-load-handler.
 import { HealthController } from './infrastructure/http/health.controller';
 import { RabbitmqModule } from './infrastructure/message-bus/rabbitmq/config/rabbitmq.module';
 import { createDynamicRabbitMqConfig } from './infrastructure/message-bus/rabbitmq/config/dynamic-rabbitmq.config';
+import { RealtimeModule } from './infrastructure/realtime/realtime.module';
 
 @Global()
 @Module({
@@ -16,6 +17,7 @@ import { createDynamicRabbitMqConfig } from './infrastructure/message-bus/rabbit
     MikroOrmModule.forFeature([InboxMessage, OutboxMessage]),
     MessageDestinationModule,
     RabbitmqModule.forRoot(createDynamicRabbitMqConfig('shared')),
+    RealtimeModule,
   ],
   controllers: [HealthController],
   providers: [InboxMessageRepository, OutboxMessageRepository, LazyLoadHandler],
@@ -26,6 +28,7 @@ import { createDynamicRabbitMqConfig } from './infrastructure/message-bus/rabbit
     OutboxMessageRepository,
     LazyLoadHandler,
     RabbitmqModule,
+    RealtimeModule,
   ],
 })
 export class SharedModule {}

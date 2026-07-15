@@ -127,16 +127,22 @@ NestJS makes implementing WebSockets simple via `@nestjs/websockets`. Here are t
 
 ## 6. How RabbitMQ Integrates with WebSockets
 
-A common mistake is trying to connect RabbitMQ directly to the frontend. Web browsers cannot speak AMQP (RabbitMQ's protocol) natively. Instead, the backend act as the bridge:
+A common mistake is trying to connect RabbitMQ directly to the frontend. Web browsers cannot speak AMQP (RabbitMQ's protocol) natively. Instead, the backend acts as the bridge:
 
 ```
 [ RabbitMQ Broker ]
         │ (AMQP Event: PaymentCompletedEvent)
         ▼
-[ Notification CLI Consumer ]
-        │ (1. Saves to DB, then calls WebSocket Gateway)
+[ Notification CLI Consumer ]  (separate process — NO socket server)
+        │ (1. Saves to DB, then calls NotificationBroadcaster.broadcastToOrder)
         ▼
-[ Notification Gateway ] 
+[ NotificationBroadcaster ] ──► [ RealtimeBroadcaster port ]
+        │
+        ▼
+[ RedisRealtimeBroadcaster ] ── PUBLISH ──► [ Redis pub/sub ]
+                                                │ (SUBSCRIBE)
+                                                ▼
+[ HTTP App: socket.io server + Redis adapter ]
         │ (2. Resolves Room "order:123")
         ▼
    [ socket.io ] ── (3. WebSockets Push) ──► [ Browser Frontend ]
@@ -145,8 +151,28 @@ A common mistake is trying to connect RabbitMQ directly to the frontend. Web bro
 ### Flow Breakdown:
 1. The **CLI Consumer** receives `PaymentCompletedEvent` from `notification-queue`.
 2. The consumer processes the message inside a database transaction, ensuring idempotency via the Inbox pattern.
-3. If database transaction succeeds, the consumer calls `gateway.broadcastToOrder(orderId, eventType, message)`.
-4. The gateway runs `server.to('order:' + orderId).emit('notification', ...)` pushing the frame immediately to the browser.
+3. If the database transaction succeeds, the consumer calls `broadcaster.broadcastToOrder(orderId, eventType, message)` on the module-owned `NotificationBroadcaster`.
+4. Because the consumer runs in a **separate process with no Socket.io server**, `NotificationBroadcaster` delegates to the generic `RealtimeBroadcaster` port, whose Redis adapter (`RedisRealtimeBroadcaster`) **publishes to Redis** via `@socket.io/redis-emitter` instead of emitting directly.
+5. The **HTTP application's** Socket.io server — which owns the browser connections and runs `@socket.io/redis-adapter` — receives the published command and emits to the connected clients.
+
+### Two delivery channels (targeted vs observability)
+
+`NotificationBroadcaster.broadcastToOrder()` fans every event out on **two** channels over the same Redis backplane:
+
+| Channel | Room | Socket event | Who receives it | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **Targeted** | `order:<orderId>` | `notification` | only clients that called `subscribeToOrder` for that order | user-facing, order-scoped reactions (e.g. toasts for "my order") — the production pattern |
+| **Firehose** | `saga:firehose` | `saga-event` | every connected client (auto-joined on connect) | the ops/observability console — powers the live RabbitMQ topology and event-flow log |
+
+**Why the firehose exists:** a client can only receive room messages *after* it has joined the room, but the saga begins the instant the order is created. With per-order rooms only, the observability console races the saga and drops early hops. The `saga:firehose` room is joined in `handleConnection` (before any order exists), so the topology receives the **complete** stream with no join race. Targeted per-order delivery is still used for order-scoped UI.
+
+> ⚠️ **Critical architecture detail:** in step 4 the notification consumer is a
+> different OS process from the WebSocket server. A process can only emit into
+> sockets it owns, so a direct `this.server.to(...).emit(...)` from the worker
+> would silently do nothing. **Redis is the pub/sub backplane** that bridges the
+> two processes (and lets Socket.io scale across many HTTP replicas). The full
+> rationale, data flow, ports/adapters design, alternatives, and interview Q&A
+> live in [`redis-setup.md`](./redis-setup.md).
 
 ---
 

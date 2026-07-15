@@ -25,7 +25,7 @@ export class ListNotificationsHandler {
     const [items, total] = await this.em.findAndCount(Notification, where, {
       limit: query.limit,
       offset: query.offset,
-      orderBy: { createdAt: 'ASC' }, // ascending so timeline reads top-to-bottom
+      orderBy: { createdAt: 'DESC' },
     });
 
     const page = Math.floor(query.offset / query.limit) + 1;

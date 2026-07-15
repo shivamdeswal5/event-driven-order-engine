@@ -1,197 +1,163 @@
-# Resilient Event-Driven Order Fulfillment Engine
+# Backend — Event-Driven Order Fulfillment Engine
 
-A production-grade modular monolith backend order fulfillment engine built with **Domain-Driven Design (DDD)** and **Vertical Slice Architecture**. The system processes orders asynchronously across modules via domain events, using a resilient RabbitMQ messaging topology with Transactional Inbox/Outbox patterns.
+NestJS **modular monolith** for asynchronous order fulfillment. Bounded contexts talk through **domain events** (RabbitMQ), not shared tables. Reliability uses **transactional outbox / inbox**. Realtime UI updates use a **Redis** Socket.io backplane so CLI workers can reach browsers.
+
+Teaching / portfolio oriented — patterns you’d expect in production systems, runnable locally with Docker Compose.
 
 ---
 
-## 1. System Architecture
+## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                     Docker Compose Environment                    │
+┌─────────────────────────────────────────────────────────────────┐
+│                     Docker Compose                               │
+│  PostgreSQL 16  ·  RabbitMQ  ·  Redis 7  ·  NestJS backend       │
 │                                                                  │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │                    NestJS Application                       │  │
-│  │                                                            │  │
-│  │   ┌────────┐  ┌──────────┐  ┌─────────┐  ┌────────────┐  │  │
-│  │   │ Order  │  │Inventory │  │ Payment │  │  Shipping  │  │  │
-│  │   │ Module │  │  Module  │  │ Module  │  │   Module   │  │  │
-│  │   └───┬────┘  └────┬─────┘  └────┬────┘  └─────┬──────┘  │  │
-│  │       │            │             │              │          │  │
-│  │   ┌───┴────────────┴─────────────┴──────────────┴───────┐ │  │
-│  │   │         Shared Infrastructure Layer                  │ │  │
-│  │   │   Message Bus · Outbox Relay · Inbox Handler · HTTP  │ │  │
-│  │   └──────────────────────┬───────────────────────────────┘ │  │
-│  └──────────────────────────┼─────────────────────────────────┘  │
-│                             │                                     │
-│   ┌─────────────────┐  ┌───┴──────────────┐  ┌───────────────┐  │
-│   │  PostgreSQL 16   │  │   RabbitMQ 4.x   │  │  Notification │  │
-│   └─────────────────┘  └──────────────────┘  │    Module     │  │
-│                                               └───────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
+│   Order │ Inventory │ Payment │ Shipping │ Notification          │
+│   (each: own schema · features/ slices · outbox · consumers)     │
+│                           │                                      │
+│              events → RabbitMQ topic topology                    │
+│              workers → Redis pub/sub → Socket.io → Console       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-The application is structured so that each bounded context is isolated into its own Postgres schema (`order_schema`, `inventory_schema`, etc.) and communicates exclusively through events. This ensures that any module can later be seamlessly decoupled into microservices.
+Modules communicate only via events. Separate schemas (`order_schema`, `inventory_schema`, …) enforce ownership and keep a realistic path to later microservice extraction.
+
+### Happy-path saga (short)
+
+1. `POST /api/orders` → OrderPlaced (outbox)  
+2. Inventory reserves → Payment charges (`.99` totals fail on purpose)  
+3. On payment success → order **PAID**, shipment **PENDING** (`ShipmentCreated`)  
+4. Operator **ship** → `ShipmentShipped` → order **SHIPPED**  
+5. Operator **deliver** → `ShipmentDelivered` → order **DELIVERED**  
+
+Notification persists a ledger and pushes live updates to the frontend.
 
 ---
 
-## 2. Tech Stack
+## Tech stack
 
-- **Framework**: NestJS (Modular Architecture, dependency injection)
-- **Database**: PostgreSQL 16 (Multi-schema isolation, `SELECT FOR UPDATE SKIP LOCKED` for concurrency)
-- **ORM**: MikroORM (Unit of Work, identity map, migrations, schema Isolation)
-- **Message Broker**: RabbitMQ 3.x/4.x (Pub/Sub via Topic Exchanges, Dead-Letter Queues, Retries)
-- **Runtime**: TypeScript & Node.js
+| Layer | Choice |
+|-------|--------|
+| Framework | NestJS (DI, modules) |
+| DB | PostgreSQL 16 · multi-schema · `SKIP LOCKED` outbox polling |
+| ORM | MikroORM |
+| Broker | RabbitMQ (topic / fanout, retries, DLQ) |
+| Realtime | Redis 7 + Socket.io adapter / emitter |
+| Runtime | TypeScript · Node.js 20+ |
 
 ---
 
-## 3. Quick Start Guide
+## Quick start
 
 ### Prerequisites
-- Docker & Docker Compose
-- Node.js 20+
 
-### Setup & Run
-1. **Clone and Configure**:
-   ```bash
-   cp .env.example .env
-   ```
-2. **Boot Database & RabbitMQ Services**:
-   ```bash
-   docker compose up -d
-   ```
-3. **Execute Migrations (All Schemas)**:
-   You can run migrations inside the container for all modules:
-   ```bash
-   docker compose exec backend npm run migration:up:shared
-   docker compose exec backend npm run migration:up:order
-   docker compose exec backend npm run migration:up:inventory
-   docker compose exec backend npm run migration:up:payment
-   docker compose exec backend npm run migration:up:shipping
-   docker compose exec backend npm run migration:up:notification
-   ```
-   Or on the host machine:
-   ```bash
-   DB_HOST=localhost npm run migration:up:shared
-   DB_HOST=localhost npm run migration:up:order
-   DB_HOST=localhost npm run migration:up:inventory
-   DB_HOST=localhost npm run migration:up:payment
-   DB_HOST=localhost npm run migration:up:shipping
-   DB_HOST=localhost npm run migration:up:notification
-   ```
-4. **Seed Mock Products & Data**:
-   Inside the container:
-   ```bash
-   docker compose exec backend npm run seed:run:inventory
-   ```
-   Or on the host machine:
-   ```bash
-   DB_HOST=localhost npm run seed:run:inventory
-   ```
-5. **Start Dev Server**:
-   You can start the NestJS dev server on the host machine (recommended for local development):
-   ```bash
-   DB_HOST=localhost RABBITMQ_URL=amqp://deswal:deswal@localhost:5672 npm run start:dev
-   ```
+- Docker & Docker Compose  
+- Node.js 20+ (for host-side scripts if you prefer not to use the container shell)
 
----
+### 1. Configure & boot infra
 
-## 4. How to Test the Event Saga
+```bash
+cd backend
+cp .env.example .env
+docker compose up -d
+```
 
-To test the entire order fulfillment saga, you need to:
-1. **Start all background consumers** first. This ensures that all RabbitMQ exchanges, queues, and bindings are declared so no published messages are lost.
-2. **Hit the API endpoints** to place orders, and then **dispatch the outbox messages** to move the saga forward.
+Services: Postgres, pgAdmin, RabbitMQ (management UI), Redis, backend container.
 
-### Step 1: Start Consumers
-Open separate terminal tabs to start the consumers for each context:
+### 2. Migrations & seed
+
+Inside the container:
+
+```bash
+docker compose exec backend npm run migration:up:shared
+docker compose exec backend npm run migration:up:order
+docker compose exec backend npm run migration:up:inventory
+docker compose exec backend npm run migration:up:payment
+docker compose exec backend npm run migration:up:shipping
+docker compose exec backend npm run migration:up:notification
+
+docker compose exec backend npm run seed:run:inventory
+```
+
+Or on the host (with `DB_HOST=localhost` and matching credentials from `.env`).
+
+### 3. API process
+
+Dev server in the container is typically already up via Compose. On the host:
+
+```bash
+DB_HOST=localhost \
+RABBITMQ_URL=amqp://deswal:deswal@localhost:5672 \
+REDIS_HOST=localhost \
+npm run start:dev
+```
+
+### 4. Consumers + outbox relays
+
+From the **repo root** (recommended):
+
+```bash
+./start-workers.sh
+```
+
+This kills stale workers, then starts `handle-messages` and continuous `dispatch-messages` for every module inside `order-engine-backend`.
+
+Manual equivalent (per module):
+
 ```bash
 npm run handle-messages -- --module=order
-npm run handle-messages -- --module=inventory
-npm run handle-messages -- --module=payment
-npm run handle-messages -- --module=shipping
-npm run handle-messages -- --module=notification
-```
-
-### Step 2: Make API Requests
-We have provided a Postman collection at the root of the project to trigger endpoints:
-- **`postman_collection.json`**: Import this file directly into **Postman** or **Thunder Client** to load pre-configured endpoints.
-
-1. List available products (GET `/api/products`) to find a product ID and its stock.
-2. Place an order (POST `/api/orders`) using that product ID. This creates the order record and stores the `OrderPlaced` event in the transactional outbox.
-
-### Step 3: Run the Outbox Dispatchers
-To publish the events from the outbox to RabbitMQ, run the dispatcher commands:
-
-#### Option A: One-by-One Step Execution (Recommended for Debugging)
-Run each dispatcher manually to step through the saga and observe the database change state in PGAdmin:
-```bash
-npm run dispatch-messages -- --module=order
-npm run dispatch-messages -- --module=inventory
-npm run dispatch-messages -- --module=payment
-npm run dispatch-messages -- --module=shipping
-```
-
-#### Option B: Continuous Polling Mode
-Run the dispatchers with the `--continuous` flag to automatically relay messages in a loop:
-```bash
 npm run dispatch-messages -- --module=order --continuous
-npm run dispatch-messages -- --module=inventory --continuous
-npm run dispatch-messages -- --module=payment --continuous
-npm run dispatch-messages -- --module=shipping --continuous
+# … inventory, payment, shipping, notification
 ```
 
-### 4.3 CLI Options & Queue Overrides (Advanced)
-Both `handle-messages` and `dispatch-messages` support advanced parameters to override queue topology, exchange types, message TTL, and retry policies at runtime:
+### 5. Exercise the saga
+
+- Import `postman_collection.json` (project / backend docs as available), **or** use the frontend Console.  
+- `GET /api/products` → `POST /api/orders`  
+- Watch RabbitMQ Management and/or Console topology  
+- When PAID: ship, then deliver via operator endpoints / Console buttons  
+
+---
+
+## Access points
+
+| Service | URL | Notes |
+|---------|-----|--------|
+| API | http://localhost:8080 | Info / routes |
+| Health | http://localhost:8080/health | |
+| RabbitMQ Management | http://localhost:15672 | user/pass from `.env` (default `deswal` / `deswal`) |
+| pgAdmin | http://localhost:8888 | from `.env` |
+| Redis | localhost:6379 | Socket.io backplane |
+
+---
+
+## Useful commands
 
 ```bash
-npm run handle-messages -- \
-  --module=order \
-  --limit=20 \
-  --primary-queue=order.custom-queue \
-  --primary-queue-exchange=order-topic \
-  --primary-queue-exchange-type=topic \
-  --retry-queue=order.custom-queue-retry \
-  --retry-queue-binding-key=order.custom-queue-retry \
-  --retry-queue-exchange=order-direct \
-  --retry-queue-exchange-type=direct \
-  --retry-queue-message-ttl=10000 \
-  --immediate-retries-number=5 \
-  --delayed-retries-number=3 \
-  --error-queue-exchange=order-direct \
-  --error-queue-exchange-type=direct \
-  --error-queue-routing-key=order.dead-letter
+DB_HOST=localhost npm run test:e2e   # E2E / resilience suite
+npm run build
+npm run lint
 ```
 
----
+Outbox poll interval: `OUTBOX_POLLING_INTERVAL_MS` (default `1000` in `.env.example` for a snappy demo).
 
-## 5. Development & Testing Commands
-
-```bash
-DB_HOST=localhost npm run test:e2e    # Run full E2E & Resilience integration test suite on host
-npm run build                         # Compile NestJS application
-npm run lint                          # Run ESLint validation
-```
+Advanced CLI flags for queue/exchange overrides belong in ops experiments — see scripts help / `docs/rabbitmq-setup.md` rather than day-one setup.
 
 ---
 
-## 6. Access Points
+## Documentation
 
-| Service | Address | Credentials |
-|---------|---------|-------------|
-| **Backend App Info** | http://localhost:8080/ | — |
-| **Backend Health Check** | http://localhost:8080/health | — |
-| **RabbitMQ Dashboard** | http://localhost:15672 | `deswal` / `deswal` (configured in `.env`) |
-| **pgAdmin Dashboard** | http://localhost:8888 | `admin@gmail.com` / `deswal` |
+| Doc | Topic |
+|-----|--------|
+| [01 Product requirements](./docs/01-product-requirements.md) | Goals & scope |
+| [02 Technical requirements](./docs/02-technical-requirements.md) | Stack & constraints |
+| [03 App flow](./docs/03-app-flow.md) | Endpoints & flow |
+| [04 Schema](./docs/04-backend-schema.md) | Postgres layouts |
+| [07 Architecture patterns](./docs/07-architecture-patterns.md) | DDD, slices, CQRS (light) |
+| [08 Saga map](./docs/08-event-flow-saga-map.md) | Event choreography |
+| [RabbitMQ setup](./docs/rabbitmq-setup.md) | Topology & outbox |
+| [Redis setup](./docs/redis-setup.md) | Realtime backplane |
+| [WebSocket setup](./docs/websocket-setup.md) | Socket.io rooms |
 
----
-
-## 7. Technical Documentation Links
-
-For deeper architectural breakdowns, see:
-- [Product Requirements](./docs/01-product-requirements.md)
-- [Technical Requirements](./docs/02-technical-requirements.md)
-- [App Flow & Endpoints](./docs/03-app-flow.md)
-- [Database Schema Layout](./docs/04-backend-schema.md)
-- [10-Phase Implementation Roadmap](./docs/05-implementation-plan.md)
-- [Choreography Saga & Event Flows](./docs/08-event-flow-saga-map.md)
-- [Websocket Real-Time Updates](./docs/websocket-setup.md)
+Frontend Console & Learn UI: [`../frontend/README.md`](../frontend/README.md).

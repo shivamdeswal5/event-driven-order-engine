@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { EntityManager, Transactional } from '@mikro-orm/core';
 import { InboxMessageRepository } from '@shared/infrastructure/repository/inbox/inbox-message.repository';
 import { Notification } from '../../domain/notification/notification.entity';
-import { NotificationGateway } from '../websocket/notification.gateway';
+import { NotificationBroadcaster } from '../realtime/notification-broadcaster.service';
 
 export abstract class BaseNotificationProcessor {
   protected readonly logger = new Logger(this.constructor.name);
@@ -10,7 +10,7 @@ export abstract class BaseNotificationProcessor {
   constructor(
     protected readonly em: EntityManager,
     protected readonly inboxRepository: InboxMessageRepository,
-    protected readonly gateway: NotificationGateway,
+    protected readonly broadcaster: NotificationBroadcaster,
   ) {}
 
   abstract getEventType(): string;
@@ -44,7 +44,7 @@ export abstract class BaseNotificationProcessor {
 
     // Broadcast only after the database transaction successfully completed/committed
     try {
-      this.gateway.broadcastToOrder(orderId, eventType, messageText);
+      this.broadcaster.broadcastToOrder(orderId, eventType, messageText);
     } catch (err) {
       this.logger.error(
         `Failed to broadcast to order ${orderId}: ${err instanceof Error ? err.message : String(err)}`,

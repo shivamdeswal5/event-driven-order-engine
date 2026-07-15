@@ -246,17 +246,21 @@ migrations/Migration_*_CreateOrdersTable.ts
 
 ### Deliverables
 - [x] Shipment entity
-- [x] Shipping events (Created, Delivered)
+- [x] Shipping events (Created, **Shipped**, Delivered)
 - [x] Get Shipment / List Shipments features
-- [x] Update Shipment Status feature
-- [x] Processor: handle PaymentCompleted → create shipment
+- [x] Ship Shipment / Deliver Shipment features (operator HTTP actions)
+- [x] Processor: handle PaymentCompleted → create shipment (PENDING)
 - [x] Processor: handle OrderCancelled → cancel shipment
+- [x] Ship handler emits `ShipmentShippedEvent` via outbox
+- [x] Deliver handler emits `ShipmentDeliveredEvent` via outbox
+- [x] Order module consumes `ShipmentShippedEvent` → order `SHIPPED` (not on `ShipmentCreated`)
 - [x] Shipping consumer worker
 - [x] Migration: shipments table
 
 ### Verification
-- [x] Payment completed → shipment auto-created
-- [x] Update shipment to DELIVERED → ShipmentDelivered event
+- [x] Payment completed → shipment auto-created (status PENDING, order stays PAID)
+- [x] Operator POST /ship → `ShipmentShippedEvent` → order SHIPPED
+- [x] Operator POST /deliver → `ShipmentDeliveredEvent` → order DELIVERED
 - [x] Order cancelled → shipment cancelled
 
 ---
@@ -266,9 +270,9 @@ migrations/Migration_*_CreateOrdersTable.ts
 ### Deliverables
 - [x] Notification entity
 - [x] List Notifications / Get by Order features
-- [x] Processors for ALL events (OrderPlaced, PaymentCompleted, PaymentFailed, ShipmentCreated, ShipmentDelivered, OrderCancelled)
+- [x] Processors for ALL events (OrderPlaced, PaymentCompleted, PaymentFailed, ShipmentCreated, **ShipmentShipped**, ShipmentDelivered, OrderCancelled)
 - [x] Notification consumer worker (subscribes to ALL exchanges)
-- [x] WebSocket room subscription and real-time event broadcasting
+- [x] WebSocket room subscription and real-time event broadcasting (Redis backplane + **saga:firehose** observability channel)
 - [x] Migration: notifications table
 
 ### Verification

@@ -1,6 +1,6 @@
 # MikroORM Migration Strategy
 
-**Version**: 1.1 | **Last Updated**: 2026-06-28
+**Version**: 1.2 | **Last Updated**: 2026-07-14 (reconciled with implementation)
 
 ---
 
@@ -10,6 +10,16 @@ This project uses a **context-aware, per-module migration strategy** powered by 
 MikroORM config factory function. Each domain module (`order`, `inventory`, etc.) has its
 own migration folder and its own PostgreSQL schema, giving true isolation while keeping a
 single shared config entry point.
+
+> **Implementation status (important):** The `shared` context and `migration:up:shared`
+> script exist in `package.json`, but there are currently **no migration files under
+> `modules/shared/`**. Instead, the `outbox_messages` and `inbox_messages` tables are
+> created **per module**, inside each module's own schema, by that module's migrations
+> (e.g. `modules/order/.../migrations/1710000000002-create-outbox.ts` and
+> `1710000000003-create-inbox.ts`). So each of `order_schema`, `inventory_schema`,
+> `payment_schema`, `shipping_schema`, and `notification_schema` has its own
+> `outbox_messages` + `inbox_messages` pair. The `shared_schema`-based layout described
+> below is the original design intent; treat the per-module layout as the source of truth.
 
 ---
 
@@ -163,8 +173,11 @@ Use **timestamp prefix** for guaranteed chronological ordering:
 YYYYMMDDHHMMSS-<description>.ts
 ```
 
-> **Rule**: Run `migration:up:shared` BEFORE any domain module migrations — shared tables
-> (inbox/outbox) must exist before modules try to use them.
+> **Rule (design intent):** In the original `shared_schema` design, `migration:up:shared`
+> would run first so the inbox/outbox tables exist before modules use them. In the current
+> implementation there are no shared migration files — each module's own migration creates
+> its `outbox_messages`/`inbox_messages` tables, so running the per-module migrations is
+> sufficient.
 
 ---
 
@@ -243,14 +256,18 @@ export default (contextName: string = 'default'): Options => {
 # 1. Build TypeScript (CLI reads compiled .js files)
 npm run build
 
-# 2. Run shared migrations first (inbox + outbox tables in shared_schema)
-npm run migration:up:shared
-
-# 3. Run order module migration (orders table in order_schema)
+# 2. Run each module's migrations (each creates its own tables +
+#    its own outbox_messages / inbox_messages inside the module schema)
 npm run migration:up:order
+npm run migration:up:inventory
+npm run migration:up:payment
+npm run migration:up:shipping
+npm run migration:up:notification
 
 # OR run everything at once (default context runs all)
 npm run migration:up
+
+# Note: `migration:up:shared` exists but currently has no migration files to apply.
 ```
 
 ---
@@ -281,14 +298,16 @@ DB_SCHEMA_NOTIFICATION=notification_schema
 Each module gets its own **PostgreSQL schema** within a single database:
 
 ```sql
--- shared_schema (inbox/outbox tables)
-shared_schema.inbox_messages
-shared_schema.outbox_messages
-shared_schema.migrations          ← tracks shared migrations only
-
--- order_schema (order tables)
+-- order_schema (order tables + its own inbox/outbox)
 order_schema.orders
+order_schema.outbox_messages
+order_schema.inbox_messages
 order_schema.migrations           ← tracks order migrations only
+
+-- inventory_schema, payment_schema, shipping_schema, notification_schema
+-- each follow the same pattern: domain table(s) + outbox_messages + inbox_messages
+
+-- shared_schema (reserved by design; no tables created yet)
 ```
 
 This gives:

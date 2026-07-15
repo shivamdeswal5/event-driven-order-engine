@@ -46,6 +46,18 @@ services:
     networks:
       - order_engine_network
 
+  # Redis service — Socket.io backplane for cross-process WebSocket broadcasts
+  redis:
+    image: redis:7-alpine
+    container_name: order-engine-redis
+    restart: always
+    ports:
+      - '${REDIS_FORWARD_PORT:-6379}:6379'
+    volumes:
+      - redisdata:/data
+    networks:
+      - order_engine_network
+
   # Backend service
   backend:
     container_name: order-engine-backend
@@ -74,3 +86,4 @@ volumes:
   pgdata: {}
   pgadmin_data: {}
   rabbitmqdata: {}
+  redisdata: {}

@@ -2,7 +2,7 @@
 
 ## Resilient Event-Driven Order Fulfillment Engine
 
-**Version**: 1.0 | **Last Updated**: 2026-06-25
+**Version**: 1.2 | **Last Updated**: 2026-07-15 (ShipmentShippedEvent saga correction)
 
 ---
 
@@ -10,13 +10,16 @@
 
 - **Engine**: PostgreSQL 16
 - **ORM**: MikroORM 6.x
-- **Single database**, module-prefixed tables
-- **UUID primary keys** via `gen_random_uuid()`
-- **JSONB** for flexible payloads (order items, event data)
+- **Single database**, **one schema per module** (`order_schema`, `inventory_schema`, `payment_schema`, `shipping_schema`, `notification_schema`), configured via `DB_SCHEMA_*` env vars
+- **UUID primary keys** (generated in the application layer, not via a DB default)
+- **JSON** columns for event payloads (outbox `payload`)
+- Enum-typed columns (e.g. order/payment `status`) are stored as **INTEGER** and mapped to their string enum in the domain layer
 
 ---
 
-## 2. Shared Infrastructure Tables
+## 2. Shared Infrastructure Tables (per module)
+
+> **Implementation note:** The outbox/inbox pattern is defined in the `shared` module (`OutboxMessage` / `InboxMessage` entities under `modules/shared/src/domain/`), but the tables are **created and stored inside each module's own schema** — there is one `outbox_messages` and one `inbox_messages` table per module schema (`order_schema.outbox_messages`, `inventory_schema.outbox_messages`, etc.). There is no central `shared_schema` for these tables. Each module's migrations create them (e.g. `modules/order/src/infrastructure/database/migrations/1710000000002-create-outbox.ts`).
 
 ### 2.1 outbox_messages
 
@@ -24,21 +27,19 @@ Stores events that need to be published to RabbitMQ. Written in the same transac
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Unique message ID |
-| event_type | VARCHAR(255) | NOT NULL | Event name: `OrderPlaced` |
-| routing_key | VARCHAR(255) | NOT NULL | RabbitMQ routing key: `order.events.order-placed` |
+| id | UUID | PK | Unique message ID (app-generated) |
+| event_type | VARCHAR(255) | NOT NULL | Event name: `OrderPlacedEvent` |
+| payload | JSON | NOT NULL | Full MessageEnvelope (serialized) |
 | exchange | VARCHAR(255) | NOT NULL | Target exchange: `order-exchange` |
-| payload | JSONB | NOT NULL | Full MessageEnvelope (serialized) |
-| correlation_id | UUID | NOT NULL | Saga correlation ID |
-| causation_id | UUID | NULL | ID of the event that caused this |
-| published_at | TIMESTAMP | NULL | NULL = not yet published |
-| retry_count | INT | DEFAULT 0 | Publishing retry attempts |
-| created_at | TIMESTAMP | DEFAULT NOW() | When the message was created |
-| updated_at | TIMESTAMP | DEFAULT NOW() | Last update time |
+| routing_key | VARCHAR(255) | NOT NULL | RabbitMQ routing key: `order.placed` |
+| correlation_id | VARCHAR(255) | NOT NULL | Saga correlation ID |
+| causation_id | VARCHAR(255) | NULL | ID of the event that caused this |
+| processed | BOOLEAN | NOT NULL, DEFAULT false | `false` = not yet published by the relay |
+| processed_at | TIMESTAMP | NULL | When the relay published it |
+| created_at | TIMESTAMP | NOT NULL, DEFAULT now() | When the message was created |
+| updated_at | TIMESTAMP | NOT NULL, DEFAULT now() | Last update time |
 
-**Indexes:**
-- `idx_outbox_unpublished` — `(published_at) WHERE published_at IS NULL` (partial index for relay polling)
-- `idx_outbox_created_at` — `(created_at)` (ordering for FIFO processing)
+**Indexes:** Primary key only. The relay polls unprocessed rows with `WHERE processed = false` using `SELECT ... FOR UPDATE SKIP LOCKED` ordered by `created_at`.
 
 ---
 
@@ -48,12 +49,12 @@ Records processed messages to achieve idempotent consumption (exactly-once seman
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Row ID |
+| id | UUID | PK | Row ID (app-generated) |
 | message_id | UUID | NOT NULL | Original message ID from producer |
 | handler_name | VARCHAR(255) | NOT NULL | Which processor handled it |
 | event_type | VARCHAR(255) | NOT NULL | Event type processed |
-| created_at | TIMESTAMP | DEFAULT NOW() | When it was processed |
-| updated_at | TIMESTAMP | DEFAULT NOW() | Last update time |
+| created_at | TIMESTAMP | NOT NULL, DEFAULT now() | When it was processed |
+| updated_at | TIMESTAMP | NOT NULL, DEFAULT now() | Last update time |
 
 **Indexes:**
 - `uq_inbox_message_handler` — UNIQUE `(message_id, handler_name)` (composite key for dedup)
@@ -68,72 +69,40 @@ Records processed messages to achieve idempotent consumption (exactly-once seman
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
-| id | UUID | PK, DEFAULT gen_random_uuid() | Order ID |
-| customer_email | VARCHAR(255) | NOT NULL | Customer email address |
-| status | VARCHAR(50) | NOT NULL, DEFAULT 'PLACED' | Current order status (enum) |
-| items | JSONB | NOT NULL | Array of order items |
-| total_amount | DECIMAL(12,2) | NOT NULL | Calculated total |
-| shipping_address | JSONB | NOT NULL | Shipping address object |
-| correlation_id | UUID | NOT NULL | Saga correlation ID |
-| cancelled_reason | VARCHAR(500) | NULL | Reason for cancellation |
-| created_at | TIMESTAMP | DEFAULT NOW() | Order creation time |
-| updated_at | TIMESTAMP | DEFAULT NOW() | Last update time |
+| id | UUID | PK | Order ID (app-generated) |
+| customer_id | UUID | NOT NULL | Customer identifier |
+| total_price | DECIMAL(10,2) | NOT NULL | Order total |
+| status | INTEGER | NOT NULL, DEFAULT 0 | Current order status (integer-mapped enum, `0 = PENDING`) |
+| cancel_reason | VARCHAR(255) | NULL | Reason for cancellation |
+| created_at | TIMESTAMP | NOT NULL, DEFAULT now() | Order creation time |
+| updated_at | TIMESTAMP | NOT NULL, DEFAULT now() | Last update time |
 
-**Indexes:**
-- `idx_orders_status` — `(status)` (filter by status)
-- `idx_orders_customer` — `(customer_email)` (lookup by customer)
-- `idx_orders_created` — `(created_at DESC)` (recent orders first)
-- `idx_orders_correlation` — `(correlation_id)` (saga tracing)
+**Indexes:** Primary key only (no secondary indexes defined in the current migration).
 
-**Order Status Enum:**
+> **Note on order items:** The persisted `orders` row does **not** store line items or a shipping address. Item details (product id, quantity, price) travel only inside the event payloads (e.g. `OrderPlacedEvent`) and are owned/reserved by the Inventory module. The order aggregate keeps just the `customer_id`, `total_price`, and lifecycle `status`.
+
+**Order Status Enum** (`modules/order/src/domain/order/enum/order-status.enum.ts`, stored as INTEGER via `OrderStatusMapper`):
 ```typescript
 enum OrderStatus {
+  PENDING = 'PENDING',
   PLACED = 'PLACED',
-  INVENTORY_RESERVED = 'INVENTORY_RESERVED',
-  PAYMENT_PROCESSING = 'PAYMENT_PROCESSING',
   PAID = 'PAID',
-  SHIPPING = 'SHIPPING',
-  DELIVERED = 'DELIVERED',
-  PAYMENT_FAILED = 'PAYMENT_FAILED',
-  CANCELLING = 'CANCELLING',
   CANCELLED = 'CANCELLED',
+  SHIPPED = 'SHIPPED',
+  DELIVERED = 'DELIVERED',
 }
 ```
 
-**Valid State Transitions:**
+**Valid State Transitions** (enforced by methods on the `Order` entity):
 ```
-PLACED → INVENTORY_RESERVED, CANCELLED
-INVENTORY_RESERVED → PAYMENT_PROCESSING, CANCELLED
-PAYMENT_PROCESSING → PAID, PAYMENT_FAILED
-PAID → SHIPPING
-SHIPPING → DELIVERED
-PAYMENT_FAILED → CANCELLING
-CANCELLING → CANCELLED
+PENDING → PLACED           (place)     — synchronous in POST /api/orders
+PLACED  → PAID             (pay)       — async via PaymentCompletedEvent
+PAID    → SHIPPED          (ship)      — async via ShipmentShippedEvent (operator POST /ship)
+SHIPPED → DELIVERED        (deliver)   — async via ShipmentDeliveredEvent (operator POST /deliver)
+PENDING | PLACED | PAID → CANCELLED   (cancel; not allowed once SHIPPED/DELIVERED)
 ```
 
-**Items JSONB Structure:**
-```json
-[
-  {
-    "productId": "uuid",
-    "productName": "Wireless Mouse",
-    "quantity": 2,
-    "unitPrice": 29.99,
-    "subtotal": 59.98
-  }
-]
-```
-
-**Shipping Address JSONB Structure:**
-```json
-{
-  "street": "123 Main St",
-  "city": "Austin",
-  "state": "TX",
-  "zipCode": "73301",
-  "country": "US"
-}
-```
+> **Important:** `ShipmentCreatedEvent` (emitted when payment completes and a shipment row is created in `PENDING` state) does **not** transition the order to `SHIPPED`. The order stays `PAID` until the operator calls `POST /api/shipments/:orderId/ship`, which emits `ShipmentShippedEvent`.
 
 ---
 
@@ -293,12 +262,12 @@ enum NotificationType {
 │     orders       │     │ inventory_reservations│
 │──────────────────│     │──────────────────────│
 │ id (PK)          │◄────│ order_id             │
-│ customer_email   │     │ product_id (FK)──────│──┐
-│ status           │     │ quantity             │  │
-│ items (JSONB)    │     │ status               │  │
-│ total_amount     │     └──────────────────────┘  │
-│ shipping_address │                                │
-│ correlation_id   │     ┌──────────────────┐      │
+│ customer_id      │     │ product_id (FK)──────│──┐
+│ total_price      │     │ quantity             │  │
+│ status (int)     │     │ status               │  │
+│ cancel_reason    │     └──────────────────────┘  │
+│ created_at       │                                │
+│ updated_at       │     ┌──────────────────┐      │
 └────────┬─────────┘     │    products      │      │
          │               │──────────────────│      │
          │               │ id (PK) ◄───────│──────┘
@@ -330,20 +299,20 @@ enum NotificationType {
     │ body             │
     └──────────────────┘
 
---- Shared Infrastructure ---
+--- Shared Infrastructure (one copy per module schema) ---
 
     ┌──────────────────────┐    ┌──────────────────────┐
     │   outbox_messages    │    │   inbox_messages     │
     │──────────────────────│    │──────────────────────│
     │ id (PK)              │    │ id (PK)              │
     │ event_type           │    │ message_id           │
-    │ routing_key          │    │ handler_name         │
+    │ payload (JSON)       │    │ handler_name         │
     │ exchange             │    │ event_type           │
-    │ payload (JSONB)      │    │ processed_at         │
+    │ routing_key          │    │ created_at           │
     │ correlation_id       │    │ (UQ: message_id +    │
     │ causation_id         │    │  handler_name)       │
-    │ published_at         │    └──────────────────────┘
-    │ retry_count          │
+    │ processed            │    └──────────────────────┘
+    │ processed_at         │
     │ created_at           │
     └──────────────────────┘
 ```
@@ -369,18 +338,17 @@ enum NotificationType {
 
 ## 10. Migration Strategy
 
+Migrations are **run per module** through the `package.json` scripts, each of which passes a MikroORM `--contextName` so it targets that module's schema and migration folder:
+
 ```bash
-# Create a new migration
-npx mikro-orm migration:create --name AddOrdersTable
-
-# Run pending migrations
-npx mikro-orm migration:up
-
-# Rollback last migration
-npx mikro-orm migration:down
-
-# Check migration status
-npx mikro-orm migration:pending
+# Run pending migrations for a specific module
+npm run migration:up:order
+npm run migration:up:inventory
+npm run migration:up:payment
+npm run migration:up:shipping
+npm run migration:up:notification
 ```
 
-Migration naming convention: `Migration_YYYYMMDD_HHMMSS_DescriptiveName.ts`
+Each module owns its migration files under `modules/<module>/src/infrastructure/database/migrations/`, and every migration issues `CREATE SCHEMA IF NOT EXISTS` for its module schema before creating tables. See [06-migration-strategy.md](06-migration-strategy.md) for the two-context (runtime vs CLI) model.
+
+Migration file naming convention: `<timestamp>-<DescriptiveName>.ts` (e.g. `1710000000001-create-orders.ts`).

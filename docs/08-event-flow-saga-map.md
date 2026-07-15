@@ -2,6 +2,8 @@
 
 This document serves as the master architectural reference for event-driven choreography, RabbitMQ routing mechanics, database state transitions, and Saga compensation flows within the modular monolith order engine.
 
+**Version**: 1.2 | **Last Updated**: 2026-07-15 — `ShipmentShippedEvent` operator flow; order stays `PAID` until ship.
+
 ---
 
 ## 1. RabbitMQ Topic Routing & Parallel Consumption (Pub/Sub)
@@ -67,7 +69,7 @@ sequenceDiagram
     participant Inventory as Inventory Module<br/>(inventory_schema)
     participant Payment as Payment Module<br/>(payment_schema)
     participant Shipping as Shipping Module<br/>(shipping_schema)
-    participant Outbox as Outbox Relay<br/>(shared_schema)
+    participant Outbox as Outbox Relay<br/>(per-module outbox_messages)
 
     Client->>Order: POST /api/orders
     Note over Order: Creates Order (status: PLACED)<br/>Writes Outbox (OrderPlacedEvent)
@@ -91,9 +93,17 @@ sequenceDiagram
     Outbox->>Shipping: Publishes PaymentCompletedEvent
     Note over Shipping: Creates Shipment (status: PENDING)<br/>Writes Outbox (ShipmentCreatedEvent)
     
+    Note over Order: Order stays PAID (awaiting operator dispatch)<br/>ShipmentCreatedEvent is consumed by Notification only
+
+    Note over Shipping: Operator: POST /api/shipments/:orderId/ship<br/>Shipment → SHIPPED<br/>Writes Outbox (ShipmentShippedEvent)
     Outbox->>Shipping: Polls outbox_messages
-    Outbox->>Order: Publishes ShipmentCreatedEvent
+    Outbox->>Order: Publishes ShipmentShippedEvent
     Note over Order: Updates Order (status: SHIPPED)
+
+    Note over Shipping: Operator: POST /api/shipments/:orderId/deliver<br/>Shipment → DELIVERED<br/>Writes Outbox (ShipmentDeliveredEvent)
+    Outbox->>Shipping: Polls outbox_messages
+    Outbox->>Order: Publishes ShipmentDeliveredEvent
+    Note over Order: Updates Order (status: DELIVERED)
 ```
 
 ---
@@ -206,8 +216,9 @@ The following table summarizes the routing rules, exchange configurations, datab
 | **`InventoryReleasedEvent`** | `inventory-exchange` | `inventory.released` | **Inventory** | Notification | **Inventory**: reservation (`status: RELEASED`), product `stock_quantity` up, `reserved_quantity` down. | Terminal event. |
 | **`PaymentCompletedEvent`** | `payment-exchange` | `payment.completed` | **Payment** | **Order**, **Shipping**, Notification | **Payment**: payment (`status: COMPLETED`). | Triggers **Order** to update to `PAID` & **Shipping** to provision shipment. |
 | **`PaymentFailedEvent`** | `payment-exchange` | `payment.failed` | **Payment** | **Order**, Notification | **Payment**: payment (`status: FAILED`). | Triggers **Order** to cancel itself and publish `OrderCancelledEvent`. |
-| **`ShipmentCreatedEvent`** | `shipping-exchange` | `shipping.created` | **Shipping** | **Order**, Notification | **Shipping**: shipment (`status: PENDING`). | Triggers **Order** to transition status to `SHIPPED`. |
-| **`ShipmentDeliveredEvent`** | `shipping-exchange` | `shipping.delivered` | **Shipping** | **Order**, Notification | **Shipping**: shipment (`status: DELIVERED`). | Triggers **Order** to transition status to `DELIVERED`. |
+| **`ShipmentCreatedEvent`** | `shipping-exchange` | `shipping.created` | **Shipping** | Notification | **Shipping**: shipment (`status: PENDING`). | Informational — order stays `PAID` awaiting operator dispatch. Consumed by Notification only. |
+| **`ShipmentShippedEvent`** | `shipping-exchange` | `shipping.shipped` | **Shipping** (operator `POST /ship`) | **Order**, Notification | **Shipping**: shipment (`status: SHIPPED`). | Triggers **Order** to transition status to `SHIPPED`. |
+| **`ShipmentDeliveredEvent`** | `shipping-exchange` | `shipping.delivered` | **Shipping** (operator `POST /deliver`) | **Order**, Notification | **Shipping**: shipment (`status: DELIVERED`). | Triggers **Order** to transition status to `DELIVERED`. |
 | **`OrderCancelledEvent`** | `order-exchange` | `order.cancelled` | **Order** | **Inventory**, **Payment**, **Shipping**, Notification | **Order**: order (`status: CANCELLED`). | Triggers **Inventory** stock release, **Payment** refund (if paid), and **Shipping** cancellation. |
 
 ---

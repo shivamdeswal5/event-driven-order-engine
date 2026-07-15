@@ -13,6 +13,8 @@ import { PaymentFailedProcessorModule } from './payment-failed/payment-failed.mo
 import { PaymentFailedProcessor } from './payment-failed/payment-failed.processor';
 import { ShipmentCreatedProcessorModule } from './shipment-created/shipment-created.module';
 import { ShipmentCreatedProcessor } from './shipment-created/shipment-created.processor';
+import { ShipmentShippedProcessorModule } from './shipment-shipped/shipment-shipped.module';
+import { ShipmentShippedProcessor } from './shipment-shipped/shipment-shipped.processor';
 import { ShipmentDeliveredProcessorModule } from './shipment-delivered/shipment-delivered.module';
 import { ShipmentDeliveredProcessor } from './shipment-delivered/shipment-delivered.processor';
 import { OrderCancelledProcessorModule } from './order-cancelled/order-cancelled.module';
@@ -57,6 +59,12 @@ export class NotificationSignatureTypes extends SignatureTypes {
         this.lazyLoader.handle(
           ShipmentCreatedProcessorModule,
           ShipmentCreatedProcessor,
+        ),
+      ],
+      ShipmentShippedEvent: [
+        this.lazyLoader.handle(
+          ShipmentShippedProcessorModule,
+          ShipmentShippedProcessor,
         ),
       ],
       ShipmentDeliveredEvent: [

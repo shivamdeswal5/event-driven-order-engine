@@ -38,8 +38,12 @@ export class DispatchMessages extends CommandRunner {
     }
 
     if (options.continuous) {
+      const pollingIntervalMs = parseInt(
+        process.env.OUTBOX_POLLING_INTERVAL_MS || '1000',
+        10,
+      );
       console.log(
-        `INFO: Starting Outbox Relay in continuous mode for schema "${targetSchema}"...`,
+        `INFO: Starting Outbox Relay in continuous mode for schema "${targetSchema}" (polling every ${pollingIntervalMs}ms)...`,
       );
       let running = true;
 
@@ -53,8 +57,7 @@ export class DispatchMessages extends CommandRunner {
 
       while (running) {
         await this.outboxMessageRelay.dispatchMessages(targetSchema, limit);
-        // Sleep for 5 seconds
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await new Promise((resolve) => setTimeout(resolve, pollingIntervalMs));
       }
       process.exit(0);
     } else {

@@ -38,6 +38,11 @@ export const rabbitmqConfig = registerAs('rabbitmq', () => ({
   maxRetries: parseInt(process.env.RABBITMQ_MAX_RETRIES || '3', 10),
 }));
 
+export const redisConfig = registerAs('redis', () => ({
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379', 10),
+}));
+
 export const outboxConfig = registerAs('outbox', () => ({
   pollingIntervalMs: parseInt(
     process.env.OUTBOX_POLLING_INTERVAL_MS || '5000',

@@ -21,9 +21,11 @@ It's a **modular monolith** with 5 domain modules: Order, Inventory, Payment, Sh
 | NestJS 11.x | Backend framework |
 | TypeScript (strict) | Language |
 | MikroORM 6.x | ORM (Unit of Work + Identity Map) |
-| PostgreSQL 16 | Database |
-| RabbitMQ 3.x | Message broker |
+| PostgreSQL 16 | Database (source of truth) |
+| RabbitMQ 3.x | Message broker (durable business events) |
 | amqplib | Raw RabbitMQ client (no wrapper) |
+| Redis 7 | Socket.io backplane for real-time WebSocket broadcasts across processes |
+| Socket.io 4.x | Real-time WebSocket transport (`/notifications` namespace) |
 | class-validator | DTO validation |
 | @nestjs/swagger | OpenAPI documentation |
 | Docker + Docker Compose | Containerization |
@@ -177,7 +179,8 @@ modules/shared/
 | Architecture Patterns | `docs/07-architecture-patterns.md` | Monolith modularity, DDD, CQRS, Inbox/Outbox patterns details |
 | Event Flow & Saga Map | `docs/08-event-flow-saga-map.md` | RabbitMQ topic routing, sequence diagrams, topology registry & routing contracts |
 | RabbitMQ Setup | `docs/rabbitmq-setup.md` | Full RabbitMQ architecture, topology, flow diagrams |
-| WebSocket Setup | `docs/websocket-setup.md` | WebSocket namespace, rooms subscription/broadcast, and integration details |
+| WebSocket Setup | `docs/websocket-setup.md` | Two-channel delivery (`notification` + `saga-event` firehose), Redis backplane, namespace/rooms |
+| Redis Setup | `docs/redis-setup.md` | Redis as the Socket.io real-time backplane: why it exists, cross-process broadcast flow, alternatives, and interview Q&A |
 
 ---
 
@@ -190,8 +193,8 @@ modules/shared/
 | 3. Order Module | ✅ Done | Domain, Features, Outbox writing, CLI worker |
 | 4. Inventory Module | ✅ Done | Subdomain entity structuring, Event Processors, 4 separated migrations |
 | 5. Payment Module | ✅ Done | Saga trigger point, domain entity scaffolding, and E2E choreography validation |
-| 6. Shipping Module | ✅ Done | Core flow, database schema, HTTP APIs, events, and E2E lifecycle/compensation testing |
-| 7. Notification Module | ✅ Done | Scaffolding, database schema, WebSocket gateway subscription, and timeline timeline REST endpoint |
+| 6. Shipping Module | ✅ Done | Shipment lifecycle, `ShipmentCreated` / `ShipmentShipped` / `ShipmentDelivered` events, operator ship/deliver HTTP APIs |
+| 7. Notification Module | ✅ Done | All-event processors, WebSocket gateway, Redis backplane, `saga:firehose` observability channel |
 | 8. Saga & Compensation | ✅ Done | Rollback and progression processors, dynamic RabbitMQ bindings, and full E2E validation |
 | 9. Retry & DLQ | ✅ Done | Resilience, DLQ setup, retry policies |
 | 10. Docs & Polish | ✅ Done | API OpenAPI and AsyncAPI specs, comprehensive docs setup |
@@ -225,10 +228,12 @@ modules/shared/
 # Build first (CLI reads compiled .js)
 npm run build
 
-# Per-module migration
-npm run migration:up:shared       # shared_schema (inbox/outbox) — run FIRST
-npm run migration:up:order        # order_schema (orders table)
+# Per-module migration (each module creates its own tables +
+# its own outbox_messages / inbox_messages in the module schema)
+npm run migration:up:order        # order_schema (orders + outbox + inbox)
+npm run migration:up:inventory    # inventory_schema (+ outbox + inbox)
 npm run migration:up              # run ALL modules at once
+# Note: migration:up:shared exists but has no migration files yet.
 
 # Create a new migration for a module
 npm run migration:create:order

@@ -12,6 +12,7 @@ import {
   appConfig,
   databaseConfig,
   rabbitmqConfig,
+  redisConfig,
   outboxConfig,
 } from '@shared/infrastructure/config/app.config';
 
@@ -25,7 +26,7 @@ import { AppHandler } from './app.handler';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-      load: [appConfig, databaseConfig, rabbitmqConfig, outboxConfig],
+      load: [appConfig, databaseConfig, rabbitmqConfig, redisConfig, outboxConfig],
     }),
     MikroOrmModule.forRoot(mikroOrmConfig),
     SharedModule,

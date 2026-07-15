@@ -5,7 +5,7 @@ import { NotificationBroadcaster } from '../../realtime/notification-broadcaster
 import { BaseNotificationProcessor } from '../base-notification.processor';
 
 @Injectable()
-export class OrderCancelledProcessor extends BaseNotificationProcessor {
+export class ShipmentShippedProcessor extends BaseNotificationProcessor {
   constructor(
     em: EntityManager,
     inboxRepository: InboxMessageRepository,
@@ -15,10 +15,10 @@ export class OrderCancelledProcessor extends BaseNotificationProcessor {
   }
 
   getEventType(): string {
-    return 'OrderCancelledEvent';
+    return 'ShipmentShippedEvent';
   }
 
   getMessageText(payload: any): string {
-    return `Order ${payload.orderId} has been cancelled. Reason: ${payload.reason || 'Saga failed/Manually cancelled'}.`;
+    return `Shipment ${payload.shipmentId} for order ${payload.orderId} has been dispatched via ${payload.carrier} (tracking ${payload.trackingNumber}).`;
   }
 }

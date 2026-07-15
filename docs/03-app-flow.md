@@ -2,7 +2,7 @@
 
 ## Resilient Event-Driven Order Fulfillment Engine
 
-**Version**: 1.0 | **Last Updated**: 2026-06-25
+**Version**: 1.2 | **Last Updated**: 2026-07-15 (ShipmentShippedEvent + operator ship/deliver flow)
 
 ---
 
@@ -50,13 +50,29 @@
       │               │               │               │               │
       │          [Outbox Relay publishes ShipmentCreated]             │
       │               │               │               │               │
-      │               │ShipmentCreated│               │               │
+      │               │               │               │  (Notification only)
+      │               │               │               │  order stays PAID
+      │               │               │               │               │
+      │  Operator: POST /api/shipments/:orderId/ship                  │
+      │               │               │               │               │
+      │          [Outbox Relay publishes ShipmentShipped]             │
+      │               │               │               │               │
+      │               │ShipmentShipped│               │               │
       │               │<─────────────┼───────────────┼───────────────│
       │               │ update status │               │               │
-      │               │ → SHIPPING    │               │               │
+      │               │ → SHIPPED     │               │               │
+      │               │               │               │               │
+      │  Operator: POST /api/shipments/:orderId/deliver               │
+      │               │               │               │               │
+      │          [Outbox Relay publishes ShipmentDelivered]           │
+      │               │               │               │               │
+      │               │ShipmentDelivered             │               │
+      │               │<─────────────┼───────────────┼───────────────│
+      │               │ update status │               │               │
+      │               │ → DELIVERED   │               │               │
 ```
 
-> **Notification Module** listens to ALL events and creates notifications at each step (omitted from diagram for clarity).
+> **Notification Module** listens to ALL events and creates notifications at each step (omitted from diagram for clarity). After payment, the order stays **PAID** until the operator dispatches the shipment; only then does `ShipmentShippedEvent` move the order to **SHIPPED**.
 
 ---
 
@@ -69,28 +85,17 @@
 ```
 Request:
 {
-  "customerEmail": "user@example.com",
+  "customerId": "customer-uuid",
   "items": [
-    { "productId": "uuid-1", "quantity": 2, "unitPrice": 29.99 },
-    { "productId": "uuid-2", "quantity": 1, "unitPrice": 49.99 }
-  ],
-  "shippingAddress": {
-    "street": "123 Main St",
-    "city": "Austin",
-    "state": "TX",
-    "zipCode": "73301",
-    "country": "US"
-  }
+    { "productId": "uuid-1", "quantity": 2, "price": 29.99 },
+    { "productId": "uuid-2", "quantity": 1, "price": 49.99 }
+  ]
 }
 
 Success (201):
 {
-  "id": "order-uuid",
-  "status": "PLACED",
-  "customerEmail": "user@example.com",
-  "items": [...],
-  "totalAmount": 109.97,
-  "createdAt": "2026-06-25T10:00:00Z"
+  "message": "Order placed successfully.",
+  "id": "order-uuid"
 }
 
 Error (400 — invalid input):
@@ -98,7 +103,7 @@ Error (400 — invalid input):
   "type": "validation-error",
   "title": "Bad Request",
   "status": 400,
-  "detail": "items must contain at least 1 element"
+  "detail": "customerId must be a UUID"
 }
 
 Error (409 — product not found):
@@ -111,12 +116,14 @@ Error (409 — product not found):
 ```
 
 **Handler Logic:**
-1. Validate DTO (automatic via ValidationPipe)
-2. Calculate totalAmount from items
-3. Create Order entity with status `PLACED`
-4. Create OutboxMessage with `OrderPlaced` event
-5. `em.flush()` — atomic save of order + outbox message
-6. Return created order
+1. Validate DTO (automatic via ValidationPipe) — requires `customerId` (UUID) and `items[]` (`productId`, `quantity`, `price`)
+2. Calculate the total price from the items
+3. Create Order entity (starts `PENDING`) and call `order.place()` → status `PLACED`
+4. Create OutboxMessage with the `OrderPlacedEvent` (item details live in the event payload, not on the order row)
+5. `em.flush()` inside `@Transactional()` — atomic save of order + outbox message
+6. Return `{ message, id }`
+
+> **Note:** The persisted order stores only `customerId`, `totalPrice`, `status`, and `cancelReason`. There is no shipping address or line-item storage on the order itself; items travel in the event payload and are reserved by the Inventory module.
 
 ---
 
@@ -126,10 +133,10 @@ Error (409 — product not found):
 Success (200):
 {
   "id": "order-uuid",
+  "customerId": "customer-uuid",
+  "totalPrice": 109.97,
   "status": "PAID",
-  "customerEmail": "user@example.com",
-  "items": [...],
-  "totalAmount": 109.97,
+  "cancelReason": null,
   "createdAt": "...",
   "updatedAt": "..."
 }
@@ -148,23 +155,19 @@ Error (404):
 #### GET /api/orders — List Orders
 
 ```
-Query params: ?status=PLACED&page=1&limit=20
+Query params: ?status=PLACED&limit=20&offset=0
+  (status optional; limit 1-100 default 10; offset >= 0 default 0)
 
 Success (200):
 {
-  "data": [...orders],
-  "meta": {
-    "page": 1,
-    "limit": 20,
-    "total": 45,
-    "totalPages": 3
-  }
+  "items": [...orders],
+  "total": 45
 }
 
 Empty state (200):
 {
-  "data": [],
-  "meta": { "page": 1, "limit": 20, "total": 0, "totalPages": 0 }
+  "items": [],
+  "total": 0
 }
 ```
 
@@ -173,11 +176,12 @@ Empty state (200):
 #### POST /api/orders/:id/cancel — Cancel Order
 
 ```
+Request (optional body):
+{ "reason": "Customer changed their mind" }
+
 Success (200):
 {
-  "id": "order-uuid",
-  "status": "CANCELLING",
-  "message": "Order cancellation initiated"
+  "message": "Order cancelled successfully."
 }
 
 Error (409 — already shipped):
@@ -185,7 +189,7 @@ Error (409 — already shipped):
   "type": "invalid-state-transition",
   "title": "Conflict",
   "status": 409,
-  "detail": "Cannot cancel order in SHIPPING status"
+  "detail": "Cannot cancel order in SHIPPED status"
 }
 
 Error (404):
@@ -194,11 +198,11 @@ Error (404):
 
 **Handler Logic:**
 1. Find order by ID (404 if not found)
-2. Validate state transition (only PLACED, INVENTORY_RESERVED, PAYMENT_PROCESSING can cancel)
-3. Set status to `CANCELLING`
-4. Create OutboxMessage with `OrderCancelled` event
+2. Call `order.cancel(reason)` — allowed from `PENDING`, `PLACED`, or `PAID`; throws if already `SHIPPED`/`DELIVERED`; idempotent if already `CANCELLED`
+3. Set status to `CANCELLED` and record `cancelReason`
+4. Create OutboxMessage with the `OrderCancelledEvent`
 5. `em.flush()` — atomic
-6. Return updated order
+6. Return `{ message }`
 
 ---
 
@@ -242,14 +246,35 @@ Error (409): { "detail": "Insufficient stock. Available: 10, requested deduction
 #### GET /api/shipments/:orderId — Get Shipment
 #### GET /api/shipments — List Shipments
 
-#### PATCH /api/shipments/:id/status — Update Shipment Status
+#### POST /api/shipments/:orderId/ship — Mark Shipment as Shipped
 
 ```
-Request: { "status": "DELIVERED" }
+Request: { "carrier": "DHL", "trackingNumber": "DHL-123456789" }
 
-Success (200): { "id": "...", "status": "DELIVERED", "deliveredAt": "..." }
-Error (409): { "detail": "Cannot transition from DELIVERED to SHIPPED" }
+Success (200): { "message": "Shipment marked as SHIPPED successfully." }
+Error (409): { "detail": "Cannot perform action 'ship' on shipment ... in state 'SHIPPED'." }
 ```
+
+**Handler Logic:**
+1. Find shipment by `orderId` (404 if not found)
+2. Call `shipment.ship(carrier, trackingNumber)` — requires status `PENDING`
+3. Save shipment + outbox (`ShipmentShippedEvent`, routing key `shipping.shipped`) in one transaction
+4. Order module consumes `ShipmentShippedEvent` asynchronously → order status → `SHIPPED`
+
+#### POST /api/shipments/:orderId/deliver — Mark Shipment as Delivered
+
+```
+(no request body)
+
+Success (200): { "message": "Shipment marked as DELIVERED successfully." }
+Error (409): { "detail": "Cannot perform action 'deliver' on shipment ... in state 'PENDING'." }
+```
+
+**Handler Logic:**
+1. Find shipment by `orderId`
+2. Call `shipment.deliver()` — requires status `SHIPPED`
+3. Save shipment + outbox (`ShipmentDeliveredEvent`, routing key `shipping.delivered`) in one transaction
+4. Order module consumes `ShipmentDeliveredEvent` asynchronously → order status → `DELIVERED`
 
 ---
 
@@ -322,7 +347,51 @@ PaymentCompleted event
         - ACK
 ```
 
-### 3.4 PaymentFailed Event Flow (Saga Compensation)
+> **Order stays PAID** after this step. Shipment creation does not advance the order to `SHIPPED`.
+
+### 3.4 ShipmentCreated Event Flow
+
+```
+ShipmentCreated event (routing key: shipping.created)
+  └─→ Notification Module only
+        - Save "Shipment provisioned" notification
+        - Broadcast via WebSocket (targeted + saga firehose)
+        - ACK
+
+  (Order module does NOT consume this event — order remains PAID)
+```
+
+### 3.5 ShipmentShipped Event Flow (operator action)
+
+```
+Trigger: POST /api/shipments/:orderId/ship
+
+ShipmentShipped event (routing key: shipping.shipped)
+  ├─→ Order Module
+  │     - Update order status → SHIPPED
+  │     - ACK
+  │
+  └─→ Notification Module
+        - Save "Shipment dispatched" notification
+        - ACK
+```
+
+### 3.6 ShipmentDelivered Event Flow (operator action)
+
+```
+Trigger: POST /api/shipments/:orderId/deliver
+
+ShipmentDelivered event (routing key: shipping.delivered)
+  ├─→ Order Module
+  │     - Update order status → DELIVERED
+  │     - ACK
+  │
+  └─→ Notification Module
+        - Save "Shipment delivered" notification
+        - ACK
+```
+
+### 3.7 PaymentFailed Event Flow (Saga Compensation)
 
 ```
 PaymentFailed event
@@ -342,7 +411,7 @@ PaymentFailed event
         - ACK
 ```
 
-### 3.5 OrderCancelled Event Flow (Fanout)
+### 3.8 OrderCancelled Event Flow (Fanout)
 
 ```
 OrderCancelled event (FANOUT — all modules receive)
@@ -390,27 +459,29 @@ Message arrives at consumer
 ## 5. Outbox Relay Flow
 
 ```
-Every 5 seconds (configurable):
+Every N seconds (configurable via `OUTBOX_POLLING_INTERVAL_MS`, default 1000ms in dev):
   1. BEGIN TRANSACTION
-  2. SELECT * FROM outbox_messages
-       WHERE published_at IS NULL
+  2. SELECT * FROM <module_schema>.outbox_messages
+       WHERE processed = false
        ORDER BY created_at ASC
-       LIMIT 100
+       LIMIT <batch size>
        FOR UPDATE SKIP LOCKED
-  3. For each unpublished message:
+  3. For each unprocessed message:
        a. Publish to RabbitMQ (exchange + routing key from message)
        b. Wait for publisher confirm
-       c. If confirmed → set published_at = NOW()
-       d. If NACK'd → increment retry_count, log error
+       c. If confirmed → set processed = true, processed_at = NOW()
+       d. If NACK'd → leave unprocessed (retried on next poll), log error
   4. COMMIT TRANSACTION
-  5. If any messages failed, they'll be picked up on next poll
+  5. Any messages left unprocessed are picked up on the next poll
 ```
+
+> The relay runs as a separate CLI process per module (`npm run dispatch-messages -- --module=<module>`), reading that module's own `outbox_messages` table.
 
 ---
 
 ## 6. Health Check Endpoint
 
-#### GET /api/health
+#### GET /health
 
 ```
 Success (200):

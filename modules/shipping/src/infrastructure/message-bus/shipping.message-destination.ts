@@ -7,6 +7,10 @@ export const registerShippingMessageDestinations = (
     exchange: 'shipping-exchange',
     routingKey: 'shipping.created',
   });
+  registry.register('ShipmentShippedEvent', {
+    exchange: 'shipping-exchange',
+    routingKey: 'shipping.shipped',
+  });
   registry.register('ShipmentDeliveredEvent', {
     exchange: 'shipping-exchange',
     routingKey: 'shipping.delivered',
